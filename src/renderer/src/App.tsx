@@ -7,11 +7,10 @@ import type {
   DownloadDashboardSnapshot,
   DownloadTask
 } from '../../types'
+import { AppHeader } from './components/AppHeader'
 import { DiagnosticsPanel } from './components/DiagnosticsPanel'
-import { HeroSection } from './components/HeroSection'
 import { NewTaskModal } from './components/NewTaskModal'
 import { RecentLogsPanel } from './components/RecentLogsPanel'
-import { StatusStrip } from './components/StatusStrip'
 import { TaskSection, type TaskAction } from './components/TaskSection'
 import { isSupportedSource } from './utils/download-task'
 
@@ -166,8 +165,11 @@ function App(): React.JSX.Element {
   return (
     <>
       <main className="app-shell">
-        <HeroSection successMessage={successMessage} onCreateTask={openModal} />
-        <DiagnosticsPanel diagnostics={diagnostics} />
+        <AppHeader
+          diagnostics={diagnostics}
+          successMessage={successMessage}
+          onCreateTask={openModal}
+        />
         <TaskSection
           actionTaskId={actionTaskId}
           isLoadingTasks={isLoadingTasks}
@@ -177,8 +179,10 @@ function App(): React.JSX.Element {
           onSelectTask={setSelectedTaskId}
           onTaskAction={handleTaskAction}
         />
-        <StatusStrip isRuntimeReady={diagnostics?.runtime.ready ?? null} />
-        <RecentLogsPanel diagnostics={diagnostics} />
+        <section className="support-grid">
+          <DiagnosticsPanel diagnostics={diagnostics} />
+          <RecentLogsPanel diagnostics={diagnostics} />
+        </section>
       </main>
 
       <NewTaskModal

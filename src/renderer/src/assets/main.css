@@ -3,9 +3,8 @@
 :root {
   color: #f7f1e3;
   background:
-    radial-gradient(circle at top left, rgba(255, 153, 51, 0.18), transparent 28%),
-    radial-gradient(circle at top right, rgba(90, 169, 255, 0.12), transparent 24%),
-    linear-gradient(180deg, #17120f 0%, #221813 44%, #0e1418 100%);
+    radial-gradient(circle at top left, rgba(255, 153, 51, 0.12), transparent 24%),
+    linear-gradient(180deg, #101215 0%, #151a1f 45%, #0d1013 100%);
   font-family: 'Segoe UI Variable', 'Bahnschrift', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
@@ -33,28 +32,24 @@ button {
 .app-shell {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
   min-height: 100vh;
-  padding: 40px;
+  padding: 24px;
   box-sizing: border-box;
-}
-
-.hero {
-  max-width: 760px;
 }
 
 .eyebrow,
 .panel-kicker,
 .status-label {
   display: block;
-  margin-bottom: 10px;
-  color: rgba(247, 241, 227, 0.64);
+  margin-bottom: 8px;
+  color: rgba(247, 241, 227, 0.58);
   font-size: 12px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-.hero h1,
+.app-header h1,
 .panel h2,
 .modal h2,
 .task-detail h3 {
@@ -62,31 +57,58 @@ button {
   font-weight: 700;
 }
 
-.hero h1 {
-  font-size: clamp(42px, 8vw, 76px);
-  line-height: 0.95;
-  letter-spacing: -0.04em;
-}
-
-.hero-copy {
-  max-width: 620px;
-  margin: 18px 0 0;
-  color: rgba(247, 241, 227, 0.8);
-  font-size: 17px;
-  line-height: 1.7;
-}
-
-.hero-actions {
+.app-header {
   display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: center;
-  margin-top: 24px;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 22px;
 }
 
-.hero-hint {
-  margin: 0;
-  color: rgba(247, 241, 227, 0.62);
+.app-header-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.app-header h1 {
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.app-header-copy {
+  max-width: 640px;
+  margin: 10px 0 0;
+  color: rgba(247, 241, 227, 0.72);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.app-header-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.header-stat {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.header-stat strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.header-stat p {
+  color: rgba(247, 241, 227, 0.6);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .primary-button,
@@ -157,18 +179,11 @@ button {
 }
 
 .panel {
-  padding: 24px;
+  padding: 20px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 24px;
-  background: rgba(16, 18, 22, 0.62);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
-}
-
-.accent-panel {
-  background:
-    linear-gradient(160deg, rgba(255, 153, 51, 0.16), rgba(16, 18, 22, 0.72) 32%),
-    rgba(16, 18, 22, 0.62);
+  border-radius: 18px;
+  background: rgba(13, 16, 20, 0.82);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
 }
 
 .panel-header,
@@ -181,15 +196,7 @@ button {
 .modal h2,
 .task-section h2,
 .task-detail h3 {
-  font-size: 28px;
-}
-
-.check-list,
-.step-list {
-  margin: 0;
-  padding-left: 20px;
-  color: rgba(247, 241, 227, 0.86);
-  line-height: 1.8;
+  font-size: 22px;
 }
 
 .diagnostic-summary {
@@ -224,7 +231,7 @@ button {
 
 .diagnostic-stats dd {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
 }
 
@@ -292,6 +299,16 @@ button {
   color: rgba(247, 241, 227, 0.62);
 }
 
+.support-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.95fr) minmax(320px, 1.05fr);
+  gap: 18px;
+}
+
+.support-panel {
+  min-height: 100%;
+}
+
 .task-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
@@ -304,8 +321,8 @@ button {
 }
 
 .task-card {
-  padding: 18px;
-  border-radius: 20px;
+  padding: 16px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
@@ -414,8 +431,8 @@ button {
 }
 
 .task-detail {
-  padding: 18px;
-  border-radius: 20px;
+  padding: 16px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -433,25 +450,6 @@ button {
 
 .break-all {
   word-break: break-all;
-}
-
-.status-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: auto;
-}
-
-.status-strip > div {
-  padding: 18px 20px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.status-strip strong {
-  font-size: 18px;
-  font-weight: 600;
 }
 
 .modal-backdrop {
@@ -541,12 +539,18 @@ button {
   }
 
   .panel-grid,
-  .status-strip {
+  .app-header-stats,
+  .support-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 640px) {
+  .app-shell {
+    padding: 16px;
+  }
+
+  .app-header-main,
   .task-section-header,
   .modal {
     padding: 18px;
@@ -557,7 +561,8 @@ button {
   .task-detail-title-row,
   .task-action-row,
   .modal-header,
-  .form-actions {
+  .form-actions,
+  .app-header-main {
     flex-direction: column;
     align-items: flex-start;
   }
