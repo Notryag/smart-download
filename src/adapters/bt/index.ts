@@ -1,4 +1,9 @@
-import type { CreateDownloadTaskInput, DownloadTaskStatus, TaskIdInput } from '../../types'
+import type {
+  CreateDownloadTaskInput,
+  DownloadTask,
+  DownloadTaskStatus,
+  TaskIdInput
+} from '../../types'
 
 const SIMULATED_TOTAL_BYTES = 512 * 1024 * 1024
 const SIMULATED_SPEED_BYTES = 2 * 1024 * 1024
@@ -38,6 +43,7 @@ export interface AttachBtTaskInput extends CreateDownloadTaskInput {
 
 export interface BtAdapter {
   attachTask(input: AttachBtTaskInput): Promise<BtAdapterSession>
+  hydrateTask(task: DownloadTask): Promise<BtAdapterSession>
   startTask(input: TaskIdInput): Promise<BtTaskSnapshot>
   getTaskSnapshot(input: TaskIdInput): Promise<BtTaskSnapshot>
   pauseTask(input: TaskIdInput): Promise<BtTaskSnapshot>
@@ -120,6 +126,31 @@ export class InMemoryBtAdapter implements BtAdapter {
     }
 
     this.sessions.set(input.taskId, session)
+
+    return session
+  }
+
+  async hydrateTask(task: DownloadTask): Promise<BtAdapterSession> {
+    assertMagnetSource(task.source)
+
+    const now = toIsoNow()
+    const totalBytes = task.totalBytes ?? SIMULATED_TOTAL_BYTES
+    const downloadedBytes = Math.min(task.downloadedBytes, totalBytes)
+    const state = task.status === 'completed' ? 'completed' : 'paused'
+    const session: BtAdapterSession = {
+      id: crypto.randomUUID(),
+      taskId: task.id,
+      source: task.source.trim(),
+      savePath: task.savePath.trim(),
+      state,
+      totalBytes,
+      downloadedBytes,
+      speedBytes: 0,
+      createdAt: task.createdAt,
+      updatedAt: now
+    }
+
+    this.sessions.set(task.id, session)
 
     return session
   }

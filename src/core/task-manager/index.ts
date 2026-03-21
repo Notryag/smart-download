@@ -1,12 +1,15 @@
 import { btSessionStateToTaskStatus, type BtAdapter, type BtTaskSnapshot } from '../../adapters'
 import type { InMemoryLogger } from '../logger'
 import type { DownloadTaskStore } from '../../storage'
-import type {
-  CreateDownloadTaskInput,
-  DeleteTaskInput,
-  DownloadTask,
-  TaskIdInput
+import {
+  isFinishedDownloadTaskStatus,
+  type CreateDownloadTaskInput,
+  type DeleteTaskInput,
+  type DownloadTask,
+  type TaskIdInput
 } from '../../types'
+
+const RESTART_RECOVERY_MESSAGE = '应用重启后下载已停止，请手动恢复任务'
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
@@ -78,6 +81,39 @@ export function createPendingMagnetTask(input: CreateDownloadTaskInput): Downloa
   }
 }
 
+function needsRuntimeSession(task: DownloadTask): boolean {
+  return task.status === 'paused'
+}
+
+function restoreTaskState(task: DownloadTask): DownloadTask {
+  const shouldPauseAfterRestart = ['pending', 'metadata', 'downloading'].includes(task.status)
+
+  if (shouldPauseAfterRestart) {
+    return updateTask(task, {
+      status: 'paused',
+      speedBytes: 0,
+      etaSeconds: undefined,
+      errorMessage: RESTART_RECOVERY_MESSAGE
+    })
+  }
+
+  if (task.status === 'paused') {
+    return updateTask(task, {
+      speedBytes: 0,
+      etaSeconds: undefined
+    })
+  }
+
+  if (isFinishedDownloadTaskStatus(task.status)) {
+    return updateTask(task, {
+      speedBytes: 0,
+      etaSeconds: undefined
+    })
+  }
+
+  return task
+}
+
 export class InMemoryTaskManager {
   private readonly tasks = new Map<string, DownloadTask>()
 
@@ -86,6 +122,25 @@ export class InMemoryTaskManager {
     private readonly logger: InMemoryLogger,
     private readonly taskStore: DownloadTaskStore
   ) {}
+
+  async restoreTasks(): Promise<void> {
+    const persistedTasks = await this.taskStore.listTasks()
+
+    for (const task of persistedTasks) {
+      const restoredTask = restoreTaskState(task)
+      this.tasks.set(restoredTask.id, restoredTask)
+
+      if (restoredTask !== task) {
+        await this.taskStore.upsertTask(restoredTask)
+      }
+
+      if (needsRuntimeSession(restoredTask)) {
+        await this.btAdapter.hydrateTask(restoredTask)
+      }
+    }
+
+    this.logger.info(`Restored ${persistedTasks.length} persisted tasks`)
+  }
 
   async createTask(input: CreateDownloadTaskInput): Promise<DownloadTask> {
     const task = createPendingMagnetTask(input)
@@ -127,6 +182,10 @@ export class InMemoryTaskManager {
   async listTasks(): Promise<DownloadTask[]> {
     const taskEntries = await Promise.all(
       Array.from(this.tasks.values()).map(async (task) => {
+        if (isFinishedDownloadTaskStatus(task.status)) {
+          return [task.id, task] as const
+        }
+
         try {
           const snapshot = await this.btAdapter.getTaskSnapshot({ taskId: task.id })
           const syncedTask = applySnapshot(task, snapshot)
@@ -214,9 +273,16 @@ export class InMemoryTaskManager {
   }
 
   async deleteTask(input: DeleteTaskInput): Promise<void> {
-    this.getTaskOrThrow(input.taskId)
+    const task = this.getTaskOrThrow(input.taskId)
 
-    await this.btAdapter.deleteTask(input)
+    try {
+      await this.btAdapter.deleteTask(input)
+    } catch (error) {
+      if (!isFinishedDownloadTaskStatus(task.status)) {
+        throw error
+      }
+    }
+
     this.tasks.delete(input.taskId)
     await this.taskStore.deleteTask(input.taskId)
     this.logger.info('Deleted task', input.taskId)
