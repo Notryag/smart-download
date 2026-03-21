@@ -49,11 +49,18 @@ function formatStatus(status: DownloadTask['status']): string {
   }
 }
 
+function formatDate(value: string): string {
+  return new Date(value).toLocaleString('zh-CN', {
+    hour12: false
+  })
+}
+
 function App(): React.JSX.Element {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
   const [tasks, setTasks] = useState<DownloadTask[]>([])
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [form, setForm] = useState<CreateDownloadTaskInput>(DEFAULT_FORM)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
@@ -83,6 +90,17 @@ function App(): React.JSX.Element {
       window.clearInterval(timer)
     }
   }, [])
+
+  useEffect(() => {
+    if (tasks.length === 0) {
+      setSelectedTaskId(null)
+      return
+    }
+
+    if (!selectedTaskId || !tasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskId(tasks[0].id)
+    }
+  }, [selectedTaskId, tasks])
 
   function openModal(): void {
     setIsModalOpen(true)
@@ -132,6 +150,7 @@ function App(): React.JSX.Element {
       setForm(DEFAULT_FORM)
       setIsModalOpen(false)
       await loadTasks()
+      setSelectedTaskId(result.taskId)
     } catch (error) {
       const message = error instanceof Error ? error.message : '创建任务失败'
       setErrorMessage(message)
@@ -139,6 +158,8 @@ function App(): React.JSX.Element {
       setIsSubmitting(false)
     }
   }
+
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null
 
   return (
     <>
@@ -178,9 +199,9 @@ function App(): React.JSX.Element {
               <h2>Magnet flow</h2>
             </header>
             <ol className="step-list">
-              <li>补任务详情基础信息。</li>
               <li>增加基础错误提示。</li>
               <li>继续完善 pause / resume / delete。</li>
+              <li>补基础日志。</li>
             </ol>
           </article>
         </section>
@@ -203,46 +224,120 @@ function App(): React.JSX.Element {
           ) : null}
 
           {!isLoadingTasks && tasks.length > 0 ? (
-            <div className="task-list">
-              {tasks.map((task) => (
-                <article key={task.id} className="task-card">
-                  <div className="task-card-header">
-                    <div>
-                      <strong>{task.name}</strong>
-                      <p>{task.id}</p>
+            <div className="task-layout">
+              <div className="task-list">
+                {tasks.map((task) => (
+                  <article
+                    key={task.id}
+                    className={`task-card${task.id === selectedTaskId ? ' task-card-selected' : ''}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedTaskId(task.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setSelectedTaskId(task.id)
+                      }
+                    }}
+                  >
+                    <div className="task-card-header">
+                      <div>
+                        <strong>{task.name}</strong>
+                        <p>{task.id}</p>
+                      </div>
+                      <span className={`status-badge status-${task.status}`}>
+                        {formatStatus(task.status)}
+                      </span>
                     </div>
-                    <span className={`status-badge status-${task.status}`}>
-                      {formatStatus(task.status)}
-                    </span>
-                  </div>
 
-                  <div className="task-progress-row">
-                    <div className="task-progress-bar">
-                      <span style={{ width: `${task.progress * 100}%` }} />
+                    <div className="task-progress-row">
+                      <div className="task-progress-bar">
+                        <span style={{ width: `${task.progress * 100}%` }} />
+                      </div>
+                      <strong>{formatProgress(task.progress)}</strong>
                     </div>
-                    <strong>{formatProgress(task.progress)}</strong>
-                  </div>
 
-                  <dl className="task-meta-grid">
-                    <div>
-                      <dt>速度</dt>
-                      <dd>{formatBytes(task.speedBytes)}/s</dd>
+                    <dl className="task-meta-grid">
+                      <div>
+                        <dt>速度</dt>
+                        <dd>{formatBytes(task.speedBytes)}/s</dd>
+                      </div>
+                      <div>
+                        <dt>已下载</dt>
+                        <dd>{formatBytes(task.downloadedBytes)}</dd>
+                      </div>
+                      <div>
+                        <dt>总大小</dt>
+                        <dd>{task.totalBytes ? formatBytes(task.totalBytes) : '待确定'}</dd>
+                      </div>
+                      <div>
+                        <dt>剩余</dt>
+                        <dd>
+                          {typeof task.etaSeconds === 'number' ? `${task.etaSeconds}s` : '--'}
+                        </dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+
+              <aside className="task-detail">
+                <header className="task-detail-header">
+                  <span className="panel-kicker">Task detail</span>
+                  <h3>基础信息</h3>
+                </header>
+
+                {selectedTask ? (
+                  <>
+                    <div className="task-detail-title-row">
+                      <div>
+                        <strong>{selectedTask.name}</strong>
+                        <p>{selectedTask.id}</p>
+                      </div>
+                      <span className={`status-badge status-${selectedTask.status}`}>
+                        {formatStatus(selectedTask.status)}
+                      </span>
                     </div>
-                    <div>
-                      <dt>已下载</dt>
-                      <dd>{formatBytes(task.downloadedBytes)}</dd>
-                    </div>
-                    <div>
-                      <dt>总大小</dt>
-                      <dd>{task.totalBytes ? formatBytes(task.totalBytes) : '待确定'}</dd>
-                    </div>
-                    <div>
-                      <dt>剩余</dt>
-                      <dd>{typeof task.etaSeconds === 'number' ? `${task.etaSeconds}s` : '--'}</dd>
-                    </div>
-                  </dl>
-                </article>
-              ))}
+
+                    <dl className="task-detail-grid">
+                      <div>
+                        <dt>任务类型</dt>
+                        <dd>{selectedTask.type}</dd>
+                      </div>
+                      <div>
+                        <dt>下载引擎</dt>
+                        <dd>{selectedTask.engine}</dd>
+                      </div>
+                      <div>
+                        <dt>保存目录</dt>
+                        <dd className="break-all">{selectedTask.savePath}</dd>
+                      </div>
+                      <div>
+                        <dt>创建时间</dt>
+                        <dd>{formatDate(selectedTask.createdAt)}</dd>
+                      </div>
+                      <div>
+                        <dt>更新时间</dt>
+                        <dd>{formatDate(selectedTask.updatedAt)}</dd>
+                      </div>
+                      <div>
+                        <dt>数据来源</dt>
+                        <dd className="break-all">{selectedTask.source}</dd>
+                      </div>
+                      <div>
+                        <dt>下载进度</dt>
+                        <dd>{formatProgress(selectedTask.progress)}</dd>
+                      </div>
+                      <div>
+                        <dt>当前速度</dt>
+                        <dd>{formatBytes(selectedTask.speedBytes)}/s</dd>
+                      </div>
+                    </dl>
+                  </>
+                ) : (
+                  <p className="empty-state">选择一个任务查看详情。</p>
+                )}
+              </aside>
             </div>
           ) : null}
         </section>

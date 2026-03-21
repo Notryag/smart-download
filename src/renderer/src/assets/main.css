@@ -56,7 +56,8 @@ button {
 
 .hero h1,
 .panel h2,
-.modal h2 {
+.modal h2,
+.task-detail h3 {
   margin: 0;
   font-weight: 700;
 }
@@ -173,7 +174,8 @@ button {
 
 .panel h2,
 .modal h2,
-.task-section h2 {
+.task-section h2,
+.task-detail h3 {
   font-size: 28px;
 }
 
@@ -203,9 +205,14 @@ button {
   color: rgba(247, 241, 227, 0.62);
 }
 
+.task-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  gap: 18px;
+}
+
 .task-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -214,17 +221,25 @@ button {
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.task-card-selected {
+  border-color: rgba(255, 157, 51, 0.7);
+  box-shadow: 0 0 0 1px rgba(255, 157, 51, 0.18);
 }
 
 .task-card-header,
-.task-progress-row {
+.task-progress-row,
+.task-detail-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.task-card-header p {
+.task-card-header p,
+.task-detail-title-row p {
   margin: 6px 0 0;
   color: rgba(247, 241, 227, 0.5);
   font-size: 12px;
@@ -285,26 +300,45 @@ button {
   background: linear-gradient(90deg, #ff9d33, #ff6a3d);
 }
 
-.task-meta-grid {
+.task-meta-grid,
+.task-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin: 16px 0 0;
 }
 
-.task-meta-grid div {
+.task-meta-grid div,
+.task-detail-grid div {
   margin: 0;
 }
 
-.task-meta-grid dt {
+.task-meta-grid dt,
+.task-detail-grid dt {
   color: rgba(247, 241, 227, 0.5);
   font-size: 12px;
   margin-bottom: 4px;
 }
 
-.task-meta-grid dd {
+.task-meta-grid dd,
+.task-detail-grid dd {
   margin: 0;
   color: rgba(247, 241, 227, 0.9);
+}
+
+.task-detail {
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.task-detail-title-row {
+  margin-top: 14px;
+}
+
+.break-all {
+  word-break: break-all;
 }
 
 .status-strip {
@@ -401,13 +435,18 @@ button {
   gap: 12px;
 }
 
+@media (max-width: 1100px) {
+  .task-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 900px) {
   .app-shell {
     padding: 24px;
   }
 
   .panel-grid,
-  .task-list,
   .status-strip {
     grid-template-columns: 1fr;
   }
@@ -419,12 +458,17 @@ button {
     padding: 18px;
   }
 
+  .task-card-header,
+  .task-progress-row,
+  .task-detail-title-row,
   .modal-header,
   .form-actions {
     flex-direction: column;
+    align-items: flex-start;
   }
 
-  .task-meta-grid {
+  .task-meta-grid,
+  .task-detail-grid {
     grid-template-columns: 1fr;
   }
 
