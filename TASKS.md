@@ -45,6 +45,7 @@
 - [x] 收口新建任务输入范围，仅保留 magnet 主链路
 - [x] 补充 task-manager 核心单元测试
 - [x] 将任务状态同步从 renderer 轮询演进到 main 主动推送
+- [x] 补充架构、决策和 AI 接手文档
 
 ## Backlog
 
