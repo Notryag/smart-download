@@ -6,6 +6,23 @@ const api: DownloadTaskApi = {
   createTask(input) {
     return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.createTask, input)
   },
+  getDashboard() {
+    return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.getDashboard)
+  },
+  onDashboardUpdated(listener) {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      snapshot: Awaited<ReturnType<DownloadTaskApi['getDashboard']>>
+    ): void => {
+      listener(snapshot)
+    }
+
+    ipcRenderer.on(DOWNLOAD_TASK_IPC_CHANNELS.dashboardUpdated, handler)
+
+    return () => {
+      ipcRenderer.off(DOWNLOAD_TASK_IPC_CHANNELS.dashboardUpdated, handler)
+    }
+  },
   listTasks() {
     return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.listTasks)
   },

@@ -1,7 +1,12 @@
 import type { FormEvent } from 'react'
 import { useEffect, useState } from 'react'
 
-import type { CreateDownloadTaskInput, DiagnosticSummary, DownloadTask } from '../../types'
+import type {
+  CreateDownloadTaskInput,
+  DiagnosticSummary,
+  DownloadDashboardSnapshot,
+  DownloadTask
+} from '../../types'
 import { DiagnosticsPanel } from './components/DiagnosticsPanel'
 import { HeroSection } from './components/HeroSection'
 import { NewTaskModal } from './components/NewTaskModal'
@@ -29,30 +34,33 @@ function App(): React.JSX.Element {
   const [successMessage, setSuccessMessage] = useState('')
   const [listErrorMessage, setListErrorMessage] = useState('')
 
-  async function loadDashboard(): Promise<void> {
-    try {
-      const nextTasks = await window.api.listTasks()
-      const nextDiagnostics = await window.api.getDiagnostics()
-      setTasks(nextTasks)
-      setDiagnostics(nextDiagnostics)
+  useEffect(() => {
+    function applyDashboard(snapshot: DownloadDashboardSnapshot): void {
+      setTasks(snapshot.tasks)
+      setDiagnostics(snapshot.diagnostics)
       setListErrorMessage('')
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '加载任务列表失败'
-      setListErrorMessage(message)
-    } finally {
       setIsLoadingTasks(false)
     }
-  }
 
-  useEffect(() => {
-    void loadDashboard()
+    async function loadInitialDashboard(): Promise<void> {
+      try {
+        const snapshot = await window.api.getDashboard()
+        applyDashboard(snapshot)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '加载任务列表失败'
+        setListErrorMessage(message)
+        setIsLoadingTasks(false)
+      }
+    }
 
-    const timer = window.setInterval(() => {
-      void loadDashboard()
-    }, 1000)
+    void loadInitialDashboard()
+
+    const unsubscribe = window.api.onDashboardUpdated((snapshot) => {
+      applyDashboard(snapshot)
+    })
 
     return () => {
-      window.clearInterval(timer)
+      unsubscribe()
     }
   }, [])
 
@@ -114,7 +122,6 @@ function App(): React.JSX.Element {
       setSuccessMessage(`任务已创建，ID: ${result.taskId}`)
       setForm(DEFAULT_FORM)
       setIsModalOpen(false)
-      await loadDashboard()
       setSelectedTaskId(result.taskId)
     } catch (error) {
       const message = error instanceof Error ? error.message : '创建任务失败'
@@ -140,8 +147,6 @@ function App(): React.JSX.Element {
           setSelectedTaskId(null)
         }
       }
-
-      await loadDashboard()
     } catch (error) {
       const message =
         error instanceof Error
