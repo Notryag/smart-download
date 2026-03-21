@@ -1,0 +1,132 @@
+@import './base.css';
+
+:root {
+  color: #f7f1e3;
+  background:
+    radial-gradient(circle at top left, rgba(255, 153, 51, 0.18), transparent 28%),
+    radial-gradient(circle at top right, rgba(90, 169, 255, 0.12), transparent 24%),
+    linear-gradient(180deg, #17120f 0%, #221813 44%, #0e1418 100%);
+  font-family: 'Segoe UI Variable', 'Bahnschrift', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  user-select: none;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-height: 100vh;
+  padding: 40px;
+  box-sizing: border-box;
+}
+
+.hero {
+  max-width: 760px;
+}
+
+.eyebrow,
+.panel-kicker,
+.status-label {
+  display: block;
+  margin-bottom: 10px;
+  color: rgba(247, 241, 227, 0.64);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.hero h1,
+.panel h2 {
+  margin: 0;
+  font-weight: 700;
+}
+
+.hero h1 {
+  font-size: clamp(42px, 8vw, 76px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.hero-copy {
+  max-width: 620px;
+  margin: 18px 0 0;
+  color: rgba(247, 241, 227, 0.8);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.panel {
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  background: rgba(16, 18, 22, 0.62);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+}
+
+.accent-panel {
+  background:
+    linear-gradient(160deg, rgba(255, 153, 51, 0.16), rgba(16, 18, 22, 0.72) 32%),
+    rgba(16, 18, 22, 0.62);
+}
+
+.panel-header {
+  margin-bottom: 18px;
+}
+
+.panel h2 {
+  font-size: 28px;
+}
+
+.check-list,
+.step-list {
+  margin: 0;
+  padding-left: 20px;
+  color: rgba(247, 241, 227, 0.86);
+  line-height: 1.8;
+}
+
+.status-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: auto;
+}
+
+.status-strip > div {
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.status-strip strong {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    padding: 24px;
+  }
+
+  .panel-grid,
+  .status-strip {
+    grid-template-columns: 1fr;
+  }
+}

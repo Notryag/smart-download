@@ -3,7 +3,7 @@
 ## Stage 1: Magnet MVP
 
 ### 基础
-- [ ] 初始化 Electron + React + TypeScript 项目
+- [x] 初始化 Electron + React + TypeScript 项目
 - [ ] 定义 DownloadTask 类型和任务状态
 - [ ] 设计 main <-> renderer 的 IPC 接口
 
