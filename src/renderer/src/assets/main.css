@@ -16,6 +16,16 @@ body {
   user-select: none;
 }
 
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -45,7 +55,8 @@ body {
 }
 
 .hero h1,
-.panel h2 {
+.panel h2,
+.modal h2 {
   margin: 0;
   font-weight: 700;
 }
@@ -62,6 +73,75 @@ body {
   color: rgba(247, 241, 227, 0.8);
   font-size: 17px;
   line-height: 1.7;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  margin-top: 24px;
+}
+
+.hero-hint {
+  margin: 0;
+  color: rgba(247, 241, 227, 0.62);
+}
+
+.primary-button,
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, #ff9d33, #ff6a3d);
+  color: #18120f;
+  font-weight: 700;
+}
+
+.primary-button:hover,
+.ghost-button:hover {
+  transform: translateY(-1px);
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+}
+
+.ghost-button {
+  background: transparent;
+  color: #f7f1e3;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.feedback {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.feedback.success {
+  background: rgba(71, 180, 123, 0.16);
+  color: #b9f3cd;
+}
+
+.feedback.error {
+  background: rgba(255, 106, 61, 0.14);
+  color: #ffd2c6;
 }
 
 .panel-grid {
@@ -85,11 +165,13 @@ body {
     rgba(16, 18, 22, 0.62);
 }
 
-.panel-header {
+.panel-header,
+.modal-header {
   margin-bottom: 18px;
 }
 
-.panel h2 {
+.panel h2,
+.modal h2 {
   font-size: 28px;
 }
 
@@ -120,6 +202,81 @@ body {
   font-weight: 600;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 5, 8, 0.62);
+  backdrop-filter: blur(8px);
+}
+
+.modal {
+  width: min(100%, 640px);
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(37, 27, 21, 0.98), rgba(17, 21, 26, 0.98)),
+    rgba(17, 21, 26, 0.98);
+  box-shadow: 0 32px 120px rgba(0, 0, 0, 0.4);
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field span {
+  color: rgba(247, 241, 227, 0.8);
+  font-size: 14px;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  padding: 14px 16px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f7f1e3;
+  outline: none;
+  resize: vertical;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: rgba(247, 241, 227, 0.34);
+}
+
+.field input:focus,
+.field textarea:focus {
+  border-color: rgba(255, 157, 51, 0.8);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     padding: 24px;
@@ -128,5 +285,22 @@ body {
   .panel-grid,
   .status-strip {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal {
+    padding: 18px;
+  }
+
+  .modal-header,
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions .primary-button,
+  .form-actions .ghost-button,
+  .modal-header .ghost-button {
+    width: 100%;
   }
 }

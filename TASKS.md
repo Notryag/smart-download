@@ -8,7 +8,7 @@
 - [x] 设计 main <-> renderer 的 IPC 接口
 
 ### 核心链路
-- [ ] 新建任务弹窗：输入 magnet 和保存目录
+- [x] 新建任务弹窗：输入 magnet 和保存目录
 - [ ] 接入单一 BT adapter
 - [ ] 创建并启动 magnet 下载任务
 - [ ] 同步任务状态、进度、速度
