@@ -6,6 +6,10 @@ import type {
   TaskIdInput
 } from '../../types'
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
+}
+
 function buildTaskName(input: CreateDownloadTaskInput): string {
   const trimmedName = input.name?.trim()
 
@@ -37,7 +41,8 @@ function applySnapshot(task: DownloadTask, snapshot: BtTaskSnapshot): DownloadTa
     downloadedBytes: snapshot.downloadedBytes,
     totalBytes: snapshot.totalBytes,
     speedBytes: snapshot.speedBytes,
-    etaSeconds: snapshot.etaSeconds
+    etaSeconds: snapshot.etaSeconds,
+    errorMessage: undefined
   })
 }
 
@@ -70,29 +75,50 @@ export class InMemoryTaskManager {
 
   async createTask(input: CreateDownloadTaskInput): Promise<DownloadTask> {
     const task = createPendingMagnetTask(input)
+    this.tasks.set(task.id, task)
 
-    await this.btAdapter.attachTask({
-      taskId: task.id,
-      source: task.source,
-      savePath: task.savePath,
-      name: task.name
-    })
+    try {
+      await this.btAdapter.attachTask({
+        taskId: task.id,
+        source: task.source,
+        savePath: task.savePath,
+        name: task.name
+      })
 
-    const startedSnapshot = await this.btAdapter.startTask({ taskId: task.id })
-    const startedTask = applySnapshot(task, startedSnapshot)
+      const startedSnapshot = await this.btAdapter.startTask({ taskId: task.id })
+      const startedTask = applySnapshot(task, startedSnapshot)
 
-    this.tasks.set(task.id, startedTask)
+      this.tasks.set(task.id, startedTask)
 
-    return startedTask
+      return startedTask
+    } catch (error) {
+      const failedTask = updateTask(task, {
+        status: 'failed',
+        errorMessage: getErrorMessage(error, '创建下载任务失败')
+      })
+
+      this.tasks.set(task.id, failedTask)
+
+      throw error
+    }
   }
 
   async listTasks(): Promise<DownloadTask[]> {
     const taskEntries = await Promise.all(
       Array.from(this.tasks.values()).map(async (task) => {
-        const snapshot = await this.btAdapter.getTaskSnapshot({ taskId: task.id })
-        const syncedTask = applySnapshot(task, snapshot)
+        try {
+          const snapshot = await this.btAdapter.getTaskSnapshot({ taskId: task.id })
+          const syncedTask = applySnapshot(task, snapshot)
 
-        return [task.id, syncedTask] as const
+          return [task.id, syncedTask] as const
+        } catch (error) {
+          const failedTask = updateTask(task, {
+            status: 'failed',
+            errorMessage: getErrorMessage(error, '同步任务状态失败')
+          })
+
+          return [task.id, failedTask] as const
+        }
       })
     )
 
@@ -107,16 +133,36 @@ export class InMemoryTaskManager {
 
   async pauseTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
-    const snapshot = await this.btAdapter.pauseTask(input)
+    try {
+      const snapshot = await this.btAdapter.pauseTask(input)
 
-    this.tasks.set(task.id, applySnapshot(task, snapshot))
+      this.tasks.set(task.id, applySnapshot(task, snapshot))
+    } catch (error) {
+      this.tasks.set(
+        task.id,
+        updateTask(task, {
+          errorMessage: getErrorMessage(error, '暂停任务失败')
+        })
+      )
+      throw error
+    }
   }
 
   async resumeTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
-    const snapshot = await this.btAdapter.resumeTask(input)
+    try {
+      const snapshot = await this.btAdapter.resumeTask(input)
 
-    this.tasks.set(task.id, applySnapshot(task, snapshot))
+      this.tasks.set(task.id, applySnapshot(task, snapshot))
+    } catch (error) {
+      this.tasks.set(
+        task.id,
+        updateTask(task, {
+          errorMessage: getErrorMessage(error, '恢复任务失败')
+        })
+      )
+      throw error
+    }
   }
 
   async deleteTask(input: DeleteTaskInput): Promise<void> {

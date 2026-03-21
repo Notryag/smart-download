@@ -289,6 +289,10 @@ function App(): React.JSX.Element {
 
                 {selectedTask ? (
                   <>
+                    {selectedTask.errorMessage ? (
+                      <p className="feedback error">{selectedTask.errorMessage}</p>
+                    ) : null}
+
                     <div className="task-detail-title-row">
                       <div>
                         <strong>{selectedTask.name}</strong>
@@ -331,6 +335,10 @@ function App(): React.JSX.Element {
                       <div>
                         <dt>当前速度</dt>
                         <dd>{formatBytes(selectedTask.speedBytes)}/s</dd>
+                      </div>
+                      <div>
+                        <dt>错误状态</dt>
+                        <dd>{selectedTask.errorMessage ?? '无'}</dd>
                       </div>
                     </dl>
                   </>
