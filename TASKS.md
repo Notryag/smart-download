@@ -20,7 +20,7 @@
 
 ### 补全
 - [x] pause / resume / delete
-- [ ] 基础日志
+- [x] 基础日志
 
 ## Stage 2: Stability
 - [ ] SQLite 持久化

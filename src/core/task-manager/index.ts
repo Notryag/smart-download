@@ -1,4 +1,5 @@
 import { btSessionStateToTaskStatus, type BtAdapter, type BtTaskSnapshot } from '../../adapters'
+import type { InMemoryLogger } from '../logger'
 import type {
   CreateDownloadTaskInput,
   DeleteTaskInput,
@@ -71,11 +72,15 @@ export function createPendingMagnetTask(input: CreateDownloadTaskInput): Downloa
 export class InMemoryTaskManager {
   private readonly tasks = new Map<string, DownloadTask>()
 
-  constructor(private readonly btAdapter: BtAdapter) {}
+  constructor(
+    private readonly btAdapter: BtAdapter,
+    private readonly logger: InMemoryLogger
+  ) {}
 
   async createTask(input: CreateDownloadTaskInput): Promise<DownloadTask> {
     const task = createPendingMagnetTask(input)
     this.tasks.set(task.id, task)
+    this.logger.info('Created pending magnet task', task.id)
 
     try {
       await this.btAdapter.attachTask({
@@ -89,15 +94,18 @@ export class InMemoryTaskManager {
       const startedTask = applySnapshot(task, startedSnapshot)
 
       this.tasks.set(task.id, startedTask)
+      this.logger.info(`Started task in ${startedTask.status} state`, task.id)
 
       return startedTask
     } catch (error) {
+      const message = getErrorMessage(error, '创建下载任务失败')
       const failedTask = updateTask(task, {
         status: 'failed',
-        errorMessage: getErrorMessage(error, '创建下载任务失败')
+        errorMessage: message
       })
 
       this.tasks.set(task.id, failedTask)
+      this.logger.error(message, task.id)
 
       throw error
     }
@@ -109,13 +117,24 @@ export class InMemoryTaskManager {
         try {
           const snapshot = await this.btAdapter.getTaskSnapshot({ taskId: task.id })
           const syncedTask = applySnapshot(task, snapshot)
+          const statusChanged = syncedTask.status !== task.status
+          const progressChanged = syncedTask.progress !== task.progress
+
+          if (statusChanged || progressChanged) {
+            this.logger.info(
+              `Synced task state: ${syncedTask.status} (${Math.round(syncedTask.progress * 100)}%)`,
+              task.id
+            )
+          }
 
           return [task.id, syncedTask] as const
         } catch (error) {
+          const message = getErrorMessage(error, '同步任务状态失败')
           const failedTask = updateTask(task, {
             status: 'failed',
-            errorMessage: getErrorMessage(error, '同步任务状态失败')
+            errorMessage: message
           })
+          this.logger.error(message, task.id)
 
           return [task.id, failedTask] as const
         }
@@ -135,15 +154,19 @@ export class InMemoryTaskManager {
     const task = this.getTaskOrThrow(input.taskId)
     try {
       const snapshot = await this.btAdapter.pauseTask(input)
+      const pausedTask = applySnapshot(task, snapshot)
 
-      this.tasks.set(task.id, applySnapshot(task, snapshot))
+      this.tasks.set(task.id, pausedTask)
+      this.logger.info('Paused task', task.id)
     } catch (error) {
+      const message = getErrorMessage(error, '暂停任务失败')
       this.tasks.set(
         task.id,
         updateTask(task, {
-          errorMessage: getErrorMessage(error, '暂停任务失败')
+          errorMessage: message
         })
       )
+      this.logger.error(message, task.id)
       throw error
     }
   }
@@ -152,15 +175,19 @@ export class InMemoryTaskManager {
     const task = this.getTaskOrThrow(input.taskId)
     try {
       const snapshot = await this.btAdapter.resumeTask(input)
+      const resumedTask = applySnapshot(task, snapshot)
 
-      this.tasks.set(task.id, applySnapshot(task, snapshot))
+      this.tasks.set(task.id, resumedTask)
+      this.logger.info('Resumed task', task.id)
     } catch (error) {
+      const message = getErrorMessage(error, '恢复任务失败')
       this.tasks.set(
         task.id,
         updateTask(task, {
-          errorMessage: getErrorMessage(error, '恢复任务失败')
+          errorMessage: message
         })
       )
+      this.logger.error(message, task.id)
       throw error
     }
   }
@@ -169,8 +196,8 @@ export class InMemoryTaskManager {
     this.getTaskOrThrow(input.taskId)
 
     await this.btAdapter.deleteTask(input)
-
     this.tasks.delete(input.taskId)
+    this.logger.info('Deleted task', input.taskId)
   }
 
   private getTaskOrThrow(taskId: string): DownloadTask {
