@@ -41,7 +41,7 @@
 - [x] 拆分 renderer 仪表盘组件与格式化工具
 - [x] 拆分 qBittorrent adapter 的类型、客户端与实现文件
 - [x] 增加 ESLint 体量限制与 antfu 基础规则
-- [ ] 创建任务失败时补偿清理远端 aria2 任务
+- [x] 创建任务失败时补偿清理远端 aria2 任务
 - [ ] 收口新建任务输入范围，仅保留 magnet 主链路
 - [ ] 将任务状态同步从 renderer 轮询演进到 main 主动推送
 

@@ -10,6 +10,7 @@ import {
 } from '../../types'
 
 const RESTART_RECOVERY_MESSAGE = '应用重启后下载已停止，请手动恢复任务'
+const CREATE_TASK_ROLLBACK_FAILED_MESSAGE = '创建任务失败，且清理远端下载任务失败'
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
@@ -192,13 +193,14 @@ export class InMemoryTaskManager {
       return startedTask
     } catch (error) {
       const message = getErrorMessage(error, '创建下载任务失败')
-      const failedTask = updateTask(currentTask, {
+      let failedTask = updateTask(currentTask, {
         status: 'failed',
         errorMessage: message
       })
 
+      failedTask = await this.rollbackCreatedTask(failedTask)
+
       this.tasks.set(task.id, failedTask)
-      this.logger.error(message, task.id)
       await this.persistTaskFailure(failedTask)
 
       throw error
@@ -338,6 +340,39 @@ export class InMemoryTaskManager {
     } catch (error) {
       const message = getErrorMessage(error, '保存失败任务状态失败')
       this.logger.error(message, task.id)
+    }
+  }
+
+  private async rollbackCreatedTask(task: DownloadTask): Promise<DownloadTask> {
+    if (!task.remoteId) {
+      this.logger.error(task.errorMessage ?? '创建下载任务失败', task.id)
+      return task
+    }
+
+    try {
+      await this.downloadAdapter.deleteTask({ taskId: task.id })
+      this.logger.info('Rolled back remote download task after create failure', task.id)
+
+      const rolledBackTask = updateTask(task, {
+        remoteId: undefined
+      })
+      this.tasks.set(task.id, rolledBackTask)
+      this.logger.error(rolledBackTask.errorMessage ?? '创建下载任务失败', task.id)
+
+      return rolledBackTask
+    } catch (rollbackError) {
+      const rollbackMessage = getErrorMessage(rollbackError, CREATE_TASK_ROLLBACK_FAILED_MESSAGE)
+      const errorMessage = task.errorMessage
+        ? `${task.errorMessage}；同时远端任务清理失败：${rollbackMessage}`
+        : `${CREATE_TASK_ROLLBACK_FAILED_MESSAGE}：${rollbackMessage}`
+      const taskWithRollbackError = updateTask(task, {
+        errorMessage
+      })
+
+      this.tasks.set(task.id, taskWithRollbackError)
+      this.logger.error(errorMessage, task.id)
+
+      return taskWithRollbackError
     }
   }
 }
