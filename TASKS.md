@@ -7,6 +7,7 @@
 - [x] 定义 DownloadTask 类型和任务状态
 - [x] 设计 main <-> renderer 的 IPC 接口
 - [x] 设计 aria2 RPC 配置读取
+- [x] 内置 aria2c 子进程托管与 RPC 控制
 
 ### 核心链路
 - [x] 新建任务弹窗：输入下载地址和保存目录

@@ -193,7 +193,10 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
   private readonly sessions = new Map<string, RuntimeSession>()
   private readonly client: Aria2RpcClient | null
 
-  constructor(config: Aria2ClientConfig | null) {
+  constructor(
+    config: Aria2ClientConfig | null,
+    private readonly unavailableMessage = '未配置 aria2 RPC。'
+  ) {
     this.client = config ? new Aria2RpcClient(config) : null
   }
 
@@ -202,7 +205,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       return {
         ready: false,
         client: 'aria2',
-        message: '未配置 aria2 RPC。请设置 ARIA2_RPC_URL，必要时补充 ARIA2_RPC_SECRET。'
+        message: this.unavailableMessage
       }
     }
 
@@ -363,7 +366,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
 
   private getClientOrThrow(): Aria2RpcClient {
     if (!this.client) {
-      throw new Error('未配置 aria2 RPC。请设置 ARIA2_RPC_URL，必要时补充 ARIA2_RPC_SECRET。')
+      throw new Error(this.unavailableMessage)
     }
 
     return this.client
