@@ -47,6 +47,8 @@
 - [x] 将任务状态同步从 renderer 轮询演进到 main 主动推送
 - [x] 补充架构、决策和 AI 接手文档
 - [x] 增强日志与诊断上下文，方便排查任务卡住问题
+- [x] 拆分 aria2 adapter 的运行时 session 管理
+- [x] 移除 Prettier，统一改为 ESLint（含 antfu）收口代码风格
 
 ## Backlog
 

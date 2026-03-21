@@ -6,12 +6,8 @@ import type {
 } from '../download'
 import type { DownloadTask, TaskIdInput } from '../../types'
 import type { LogContext } from '../../core'
-import type {
-  Aria2ClientConfig,
-  Aria2RpcResponse,
-  Aria2TellStatusResult,
-  RuntimeSession
-} from './types'
+import type { Aria2ClientConfig, Aria2RpcResponse, Aria2TellStatusResult } from './types'
+import { Aria2RuntimeSessionStore } from './runtime-session-store'
 import {
   ARIA2_DIAGNOSTIC_LOG_INTERVAL_MS,
   ARIA2_STATE_SETTLE_INTERVAL_MS,
@@ -98,8 +94,8 @@ export class Aria2RpcClient {
 }
 
 export class Aria2DownloadAdapter implements DownloadAdapter {
-  private readonly sessions = new Map<string, RuntimeSession>()
   private readonly client: Aria2RpcClient | null
+  private readonly sessionStore = new Aria2RuntimeSessionStore()
   private readonly lastTaskErrorLog = new Map<string, string>()
   private readonly lastZeroSpeedLogAt = new Map<string, number>()
 
@@ -175,16 +171,14 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       pause: 'true'
     })
 
-    const session: RuntimeSession = {
+    const session = this.sessionStore.createSession({
       taskId: input.taskId,
       gid,
       source: input.source.trim(),
       savePath: input.savePath.trim(),
       createdAt: now,
       updatedAt: now
-    }
-
-    this.sessions.set(input.taskId, session)
+    })
     this.logger?.info('aria2 accepted task and returned remote GID', {
       category: 'aria2-adapter',
       details: {
@@ -213,25 +207,12 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
   async hydrateTask(task: DownloadTask): Promise<DownloadAdapterSession> {
     assertSource(task.source)
 
-    if (!task.remoteId) {
-      throw new Error('任务缺少 aria2 GID，无法恢复运行时状态。')
-    }
-
     const now = toIsoNow()
-    const session: RuntimeSession = {
-      taskId: task.id,
-      gid: task.remoteId,
-      source: task.source.trim(),
-      savePath: task.savePath.trim(),
-      createdAt: task.createdAt,
-      updatedAt: now
-    }
-
-    this.sessions.set(task.id, session)
+    const session = this.sessionStore.hydrateTask(task, now)
     this.logger?.info('Hydrated aria2 runtime session from persisted task', {
       category: 'aria2-adapter',
       details: {
-        gid: task.remoteId,
+        gid: session.gid,
         status: task.status
       },
       taskId: task.id
@@ -240,7 +221,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     return {
       id: crypto.randomUUID(),
       taskId: task.id,
-      remoteId: task.remoteId,
+      remoteId: session.gid,
       source: session.source,
       savePath: session.savePath,
       status: task.status,
@@ -257,21 +238,17 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
   }
 
   async getTaskSnapshot(input: TaskIdInput): Promise<DownloadTaskSnapshot> {
-    const session = this.getSessionOrThrow(input.taskId)
+    const session = this.sessionStore.getSessionOrThrow(input.taskId)
     const result = await this.getClientOrThrow().tellStatus(session.gid)
     const snapshot = buildSnapshot(session, result)
     this.maybeLogSnapshot(result, snapshot)
-
-    this.sessions.set(input.taskId, {
-      ...session,
-      updatedAt: snapshot.updatedAt
-    })
+    this.sessionStore.touchSession(input.taskId, snapshot.updatedAt)
 
     return snapshot
   }
 
   async pauseTask(input: TaskIdInput): Promise<DownloadTaskSnapshot> {
-    const session = this.getSessionOrThrow(input.taskId)
+    const session = this.sessionStore.getSessionOrThrow(input.taskId)
     this.logger?.info('Sending pause command to aria2', {
       category: 'aria2-adapter',
       details: {
@@ -284,7 +261,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
   }
 
   async resumeTask(input: TaskIdInput): Promise<DownloadTaskSnapshot> {
-    const session = this.getSessionOrThrow(input.taskId)
+    const session = this.sessionStore.getSessionOrThrow(input.taskId)
     this.logger?.info('Sending resume command to aria2', {
       category: 'aria2-adapter',
       details: {
@@ -303,7 +280,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
   }
 
   async deleteTask(input: TaskIdInput): Promise<void> {
-    const session = this.getSessionOrThrow(input.taskId)
+    const session = this.sessionStore.getSessionOrThrow(input.taskId)
     const client = this.getClientOrThrow()
     this.logger?.info('Deleting aria2 task', {
       category: 'aria2-adapter',
@@ -333,7 +310,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       }
     }
 
-    this.sessions.delete(input.taskId)
+    this.sessionStore.deleteSession(input.taskId)
   }
 
   private getClientOrThrow(): Aria2RpcClient {
@@ -342,16 +319,6 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     }
 
     return this.client
-  }
-
-  private getSessionOrThrow(taskId: string): RuntimeSession {
-    const session = this.sessions.get(taskId)
-
-    if (!session) {
-      throw new Error(`Download session not found for task: ${taskId}`)
-    }
-
-    return session
   }
 
   private async waitForSnapshot(
