@@ -43,6 +43,7 @@
 - [x] 增加 ESLint 体量限制与 antfu 基础规则
 - [x] 创建任务失败时补偿清理远端 aria2 任务
 - [x] 收口新建任务输入范围，仅保留 magnet 主链路
+- [x] 补充 task-manager 核心单元测试
 - [ ] 将任务状态同步从 renderer 轮询演进到 main 主动推送
 
 ## Backlog
