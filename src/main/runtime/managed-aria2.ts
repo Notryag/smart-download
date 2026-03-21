@@ -26,10 +26,13 @@ function readEnv(name: string): string | null {
 function getAria2ResourceCandidates(): string[] {
   const binaryName = getPlatformBinaryName()
   const cwd = process.cwd()
+  const resourcesPath = process.resourcesPath
   const candidates = [
     readEnv('ARIA2C_BIN'),
-    join(process.resourcesPath, 'aria2', `${process.platform}-${process.arch}`, binaryName),
-    join(process.resourcesPath, 'aria2', process.platform, binaryName),
+    resourcesPath
+      ? join(resourcesPath, 'aria2', `${process.platform}-${process.arch}`, binaryName)
+      : null,
+    resourcesPath ? join(resourcesPath, 'aria2', process.platform, binaryName) : null,
     join(cwd, 'resources', 'aria2', `${process.platform}-${process.arch}`, binaryName),
     join(cwd, 'resources', 'aria2', process.platform, binaryName)
   ]

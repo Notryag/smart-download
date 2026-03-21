@@ -39,6 +39,9 @@ interface RuntimeSession {
   updatedAt: string
 }
 
+const ARIA2_STATE_SETTLE_TIMEOUT_MS = 5_000
+const ARIA2_STATE_SETTLE_INTERVAL_MS = 150
+
 function toIsoNow(): string {
   return new Date().toISOString()
 }
@@ -100,15 +103,24 @@ function toRuntimeStatusMessage(error: unknown): string {
   return `aria2 RPC 检查失败：${message}`
 }
 
+function isSettledTaskStatus(status: DownloadTaskStatus): boolean {
+  return ['paused', 'completed', 'failed', 'canceled'].includes(status)
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function buildSnapshot(
   session: RuntimeSession,
   result: Aria2TellStatusResult
 ): DownloadTaskSnapshot {
   const totalBytes = parseBytes(result.totalLength)
   const downloadedBytes = parseBytes(result.completedLength)
-  const speedBytes = parseBytes(result.downloadSpeed)
-  const progress = totalBytes > 0 ? Math.min(downloadedBytes / totalBytes, 1) : 0
   const status = mapAria2Status(session.source, result.status, totalBytes)
+  const speedBytes =
+    status === 'downloading' || status === 'metadata' ? parseBytes(result.downloadSpeed) : 0
+  const progress = totalBytes > 0 ? Math.min(downloadedBytes / totalBytes, 1) : 0
 
   return {
     taskId: session.taskId,
@@ -328,13 +340,19 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
   async pauseTask(input: TaskIdInput): Promise<DownloadTaskSnapshot> {
     const session = this.getSessionOrThrow(input.taskId)
     await this.getClientOrThrow().pause(session.gid)
-    return this.getTaskSnapshot(input)
+    return this.waitForSnapshot(input, (snapshot) => isSettledTaskStatus(snapshot.status))
   }
 
   async resumeTask(input: TaskIdInput): Promise<DownloadTaskSnapshot> {
     const session = this.getSessionOrThrow(input.taskId)
     await this.getClientOrThrow().unpause(session.gid)
-    return this.getTaskSnapshot(input)
+    return this.waitForSnapshot(
+      input,
+      (snapshot) =>
+        snapshot.status === 'metadata' ||
+        snapshot.status === 'downloading' ||
+        isSettledTaskStatus(snapshot.status)
+    )
   }
 
   async deleteTask(input: TaskIdInput): Promise<void> {
@@ -380,5 +398,24 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     }
 
     return session
+  }
+
+  private async waitForSnapshot(
+    input: TaskIdInput,
+    predicate: (snapshot: DownloadTaskSnapshot) => boolean
+  ): Promise<DownloadTaskSnapshot> {
+    const deadline = Date.now() + ARIA2_STATE_SETTLE_TIMEOUT_MS
+
+    while (Date.now() < deadline) {
+      const snapshot = await this.getTaskSnapshot(input)
+
+      if (predicate(snapshot)) {
+        return snapshot
+      }
+
+      await delay(ARIA2_STATE_SETTLE_INTERVAL_MS)
+    }
+
+    return this.getTaskSnapshot(input)
   }
 }
