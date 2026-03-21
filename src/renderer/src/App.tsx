@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
 import { useEffect, useState } from 'react'
 
-import type { CreateDownloadTaskInput, DownloadTask } from '../../types'
+import type { CreateDownloadTaskInput, DiagnosticSummary, DownloadTask } from '../../types'
 
 const DEFAULT_FORM: CreateDownloadTaskInput = {
   source: '',
@@ -55,6 +55,10 @@ function formatDate(value: string): string {
   })
 }
 
+function formatLogLevel(level: 'info' | 'error'): string {
+  return level === 'error' ? '错误' : '信息'
+}
+
 function canPauseTask(task: DownloadTask): boolean {
   return !['paused', 'completed', 'failed', 'canceled'].includes(task.status)
 }
@@ -69,16 +73,19 @@ function App(): React.JSX.Element {
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
   const [actionTaskId, setActionTaskId] = useState<string | null>(null)
   const [tasks, setTasks] = useState<DownloadTask[]>([])
+  const [diagnostics, setDiagnostics] = useState<DiagnosticSummary | null>(null)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [form, setForm] = useState<CreateDownloadTaskInput>(DEFAULT_FORM)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [listErrorMessage, setListErrorMessage] = useState('')
 
-  async function loadTasks(): Promise<void> {
+  async function loadDashboard(): Promise<void> {
     try {
       const nextTasks = await window.api.listTasks()
+      const nextDiagnostics = await window.api.getDiagnostics()
       setTasks(nextTasks)
+      setDiagnostics(nextDiagnostics)
       setListErrorMessage('')
     } catch (error) {
       const message = error instanceof Error ? error.message : '加载任务列表失败'
@@ -89,10 +96,10 @@ function App(): React.JSX.Element {
   }
 
   useEffect(() => {
-    void loadTasks()
+    void loadDashboard()
 
     const timer = window.setInterval(() => {
-      void loadTasks()
+      void loadDashboard()
     }, 1000)
 
     return () => {
@@ -158,7 +165,7 @@ function App(): React.JSX.Element {
       setSuccessMessage(`任务已创建，ID: ${result.taskId}`)
       setForm(DEFAULT_FORM)
       setIsModalOpen(false)
-      await loadTasks()
+      await loadDashboard()
       setSelectedTaskId(result.taskId)
     } catch (error) {
       const message = error instanceof Error ? error.message : '创建任务失败'
@@ -188,7 +195,7 @@ function App(): React.JSX.Element {
         }
       }
 
-      await loadTasks()
+      await loadDashboard()
     } catch (error) {
       const message =
         error instanceof Error
@@ -241,14 +248,57 @@ function App(): React.JSX.Element {
 
           <article className="panel accent-panel">
             <header className="panel-header">
-              <span className="panel-kicker">Next tasks</span>
-              <h2>Magnet flow</h2>
+              <span className="panel-kicker">Diagnostics</span>
+              <h2>基础诊断摘要</h2>
             </header>
-            <ol className="step-list">
-              <li>补基础日志。</li>
-              <li>如果需要，再加设置页和目录选择器。</li>
-              <li>后续再接真实 BT 引擎。</li>
-            </ol>
+            {diagnostics ? (
+              <div className="diagnostic-summary">
+                <p className="diagnostic-overview">{diagnostics.overview}</p>
+
+                <dl className="diagnostic-stats">
+                  <div>
+                    <dt>总任务</dt>
+                    <dd>{diagnostics.taskStats.total}</dd>
+                  </div>
+                  <div>
+                    <dt>进行中</dt>
+                    <dd>{diagnostics.taskStats.active}</dd>
+                  </div>
+                  <div>
+                    <dt>已暂停</dt>
+                    <dd>{diagnostics.taskStats.paused}</dd>
+                  </div>
+                  <div>
+                    <dt>失败</dt>
+                    <dd>{diagnostics.taskStats.failed}</dd>
+                  </div>
+                </dl>
+
+                <p
+                  className={`feedback diagnostic-feedback ${diagnostics.network.ready ? 'success' : 'error'}`}
+                >
+                  {diagnostics.network.message}
+                </p>
+
+                {diagnostics.highlights.length > 0 ? (
+                  <div className="diagnostic-list">
+                    {diagnostics.highlights.map((highlight) => (
+                      <article
+                        key={highlight.id}
+                        className={`diagnostic-item diagnostic-${highlight.severity}`}
+                      >
+                        <strong>{highlight.title}</strong>
+                        <p>{highlight.detail}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-state">当前没有额外告警，主链路状态正常。</p>
+                )}
+              </div>
+            ) : (
+              <p className="empty-state">正在生成诊断摘要...</p>
+            )}
           </article>
         </section>
 
@@ -433,10 +483,44 @@ function App(): React.JSX.Element {
             <strong>Electron</strong>
           </div>
           <div>
-            <span className="status-label">Task creation</span>
-            <strong>Typed IPC ready</strong>
+            <span className="status-label">Diagnostics</span>
+            <strong>
+              {diagnostics
+                ? diagnostics.network.ready
+                  ? 'Network Ready'
+                  : 'Attention Needed'
+                : 'Loading'}
+            </strong>
           </div>
         </section>
+
+        {diagnostics ? (
+          <section className="panel">
+            <header className="panel-header">
+              <span className="panel-kicker">Recent logs</span>
+              <h2>最近日志</h2>
+            </header>
+            {diagnostics.recentLogs.length > 0 ? (
+              <div className="diagnostic-list">
+                {diagnostics.recentLogs.map((entry) => (
+                  <article
+                    key={entry.id}
+                    className={`diagnostic-item diagnostic-${entry.level === 'error' ? 'error' : 'info'}`}
+                  >
+                    <strong>
+                      {formatLogLevel(entry.level)}
+                      {entry.taskId ? ` · ${entry.taskId}` : ''}
+                    </strong>
+                    <p>{entry.message}</p>
+                    <span className="diagnostic-time">{formatDate(entry.createdAt)}</span>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">还没有日志记录。</p>
+            )}
+          </section>
+        ) : null}
       </main>
 
       {isModalOpen ? (

@@ -232,6 +232,12 @@ export class InMemoryTaskManager {
     )
   }
 
+  getTasks(): DownloadTask[] {
+    return Array.from(this.tasks.values()).sort((left, right) =>
+      right.createdAt.localeCompare(left.createdAt)
+    )
+  }
+
   async pauseTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
     try {

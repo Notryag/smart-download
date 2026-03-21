@@ -1,8 +1,13 @@
 import { ipcMain } from 'electron'
-import type { InMemoryTaskManager } from '../../core'
+import type { BasicDiagnosticsService, InMemoryTaskManager } from '../../core'
 import { DOWNLOAD_TASK_IPC_CHANNELS, type DownloadTaskApi } from '../../types'
+import type { LogEntry } from '../../core'
 
-export function registerDownloadTaskIpc(taskManager: InMemoryTaskManager): void {
+export function registerDownloadTaskIpc(
+  taskManager: InMemoryTaskManager,
+  diagnosticsService: BasicDiagnosticsService,
+  listLogs: () => LogEntry[]
+): void {
   ipcMain.handle(
     DOWNLOAD_TASK_IPC_CHANNELS.createTask,
     async (_event, input: Parameters<DownloadTaskApi['createTask']>[0]) => {
@@ -14,6 +19,10 @@ export function registerDownloadTaskIpc(taskManager: InMemoryTaskManager): void 
 
   ipcMain.handle(DOWNLOAD_TASK_IPC_CHANNELS.listTasks, async () => {
     return taskManager.listTasks()
+  })
+
+  ipcMain.handle(DOWNLOAD_TASK_IPC_CHANNELS.getDiagnostics, async () => {
+    return diagnosticsService.getSummary(taskManager.getTasks(), listLogs())
   })
 
   ipcMain.handle(

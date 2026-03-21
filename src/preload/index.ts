@@ -9,6 +9,9 @@ const api: DownloadTaskApi = {
   listTasks() {
     return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.listTasks)
   },
+  getDiagnostics() {
+    return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.getDiagnostics)
+  },
   pauseTask(input) {
     return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.pauseTask, input)
   },

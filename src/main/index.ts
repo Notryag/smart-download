@@ -3,7 +3,12 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { InMemoryBtAdapter } from '../adapters'
-import { DnsNetworkChecker, InMemoryLogger, InMemoryTaskManager } from '../core'
+import {
+  BasicDiagnosticsService,
+  DnsNetworkChecker,
+  InMemoryLogger,
+  InMemoryTaskManager
+} from '../core'
 import { SqliteDownloadTaskStore } from '../storage'
 import { registerDownloadTaskIpc } from './ipc/download-task'
 
@@ -49,15 +54,18 @@ app.whenReady().then(() => {
   const taskStore = new SqliteDownloadTaskStore(
     join(app.getPath('userData'), 'storage', 'download-tasks.sqlite')
   )
+  const logger = new InMemoryLogger()
+  const networkChecker = new DnsNetworkChecker()
   const taskManager = new InMemoryTaskManager(
     new InMemoryBtAdapter(),
-    new InMemoryLogger(),
+    logger,
     taskStore,
-    new DnsNetworkChecker()
+    networkChecker
   )
+  const diagnosticsService = new BasicDiagnosticsService(networkChecker)
 
   return taskManager.restoreTasks().then(() => {
-    registerDownloadTaskIpc(taskManager)
+    registerDownloadTaskIpc(taskManager, diagnosticsService, () => logger.listEntries())
 
     createWindow()
 

@@ -192,6 +192,88 @@ button {
   line-height: 1.8;
 }
 
+.diagnostic-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.diagnostic-overview {
+  margin: 0;
+  color: rgba(247, 241, 227, 0.88);
+  line-height: 1.7;
+}
+
+.diagnostic-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.diagnostic-stats div,
+.diagnostic-list {
+  margin: 0;
+}
+
+.diagnostic-stats dt {
+  margin-bottom: 4px;
+  color: rgba(247, 241, 227, 0.52);
+  font-size: 12px;
+}
+
+.diagnostic-stats dd {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.diagnostic-feedback {
+  margin: 0;
+}
+
+.diagnostic-list {
+  display: grid;
+  gap: 12px;
+}
+
+.diagnostic-item {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.diagnostic-item strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.diagnostic-item p {
+  margin: 0;
+  color: rgba(247, 241, 227, 0.82);
+  line-height: 1.6;
+}
+
+.diagnostic-item.diagnostic-warning {
+  border-color: rgba(255, 196, 87, 0.24);
+}
+
+.diagnostic-item.diagnostic-error {
+  border-color: rgba(255, 106, 61, 0.24);
+}
+
+.diagnostic-item.diagnostic-info {
+  border-color: rgba(67, 155, 255, 0.24);
+}
+
+.diagnostic-time {
+  display: inline-block;
+  margin-top: 10px;
+  color: rgba(247, 241, 227, 0.5);
+  font-size: 12px;
+}
+
 .task-section {
   display: flex;
   flex-direction: column;
@@ -481,7 +563,8 @@ button {
   }
 
   .task-meta-grid,
-  .task-detail-grid {
+  .task-detail-grid,
+  .diagnostic-stats {
     grid-template-columns: 1fr;
   }
 
