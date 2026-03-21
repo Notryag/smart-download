@@ -127,6 +127,11 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.danger-button {
+  border-color: rgba(255, 106, 61, 0.24);
+  color: #ffd2c6;
+}
+
 .feedback {
   margin: 16px 0 0;
   padding: 12px 14px;
@@ -333,6 +338,13 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.task-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .task-detail-title-row {
   margin-top: 14px;
 }
@@ -461,6 +473,7 @@ button {
   .task-card-header,
   .task-progress-row,
   .task-detail-title-row,
+  .task-action-row,
   .modal-header,
   .form-actions {
     flex-direction: column;

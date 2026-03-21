@@ -19,7 +19,7 @@
 - [x] 基础错误提示
 
 ### 补全
-- [ ] pause / resume / delete
+- [x] pause / resume / delete
 - [ ] 基础日志
 
 ## Stage 2: Stability

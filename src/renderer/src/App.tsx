@@ -55,10 +55,19 @@ function formatDate(value: string): string {
   })
 }
 
+function canPauseTask(task: DownloadTask): boolean {
+  return !['paused', 'completed', 'failed', 'canceled'].includes(task.status)
+}
+
+function canResumeTask(task: DownloadTask): boolean {
+  return task.status === 'paused'
+}
+
 function App(): React.JSX.Element {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
+  const [actionTaskId, setActionTaskId] = useState<string | null>(null)
   const [tasks, setTasks] = useState<DownloadTask[]>([])
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [form, setForm] = useState<CreateDownloadTaskInput>(DEFAULT_FORM)
@@ -159,6 +168,43 @@ function App(): React.JSX.Element {
     }
   }
 
+  async function handleTaskAction(
+    action: 'pause' | 'resume' | 'delete',
+    taskId: string
+  ): Promise<void> {
+    setActionTaskId(taskId)
+    setListErrorMessage('')
+
+    try {
+      if (action === 'pause') {
+        await window.api.pauseTask({ taskId })
+      } else if (action === 'resume') {
+        await window.api.resumeTask({ taskId })
+      } else {
+        await window.api.deleteTask({ taskId })
+
+        if (selectedTaskId === taskId) {
+          setSelectedTaskId(null)
+        }
+      }
+
+      await loadTasks()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : action === 'delete'
+            ? '删除任务失败'
+            : action === 'pause'
+              ? '暂停任务失败'
+              : '恢复任务失败'
+
+      setListErrorMessage(message)
+    } finally {
+      setActionTaskId(null)
+    }
+  }
+
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null
 
   return (
@@ -199,9 +245,9 @@ function App(): React.JSX.Element {
               <h2>Magnet flow</h2>
             </header>
             <ol className="step-list">
-              <li>增加基础错误提示。</li>
-              <li>继续完善 pause / resume / delete。</li>
               <li>补基础日志。</li>
+              <li>如果需要，再加设置页和目录选择器。</li>
+              <li>后续再接真实 BT 引擎。</li>
             </ol>
           </article>
         </section>
@@ -292,6 +338,33 @@ function App(): React.JSX.Element {
                     {selectedTask.errorMessage ? (
                       <p className="feedback error">{selectedTask.errorMessage}</p>
                     ) : null}
+
+                    <div className="task-action-row">
+                      <button
+                        className="ghost-button"
+                        disabled={!canPauseTask(selectedTask) || actionTaskId === selectedTask.id}
+                        type="button"
+                        onClick={() => void handleTaskAction('pause', selectedTask.id)}
+                      >
+                        暂停
+                      </button>
+                      <button
+                        className="ghost-button"
+                        disabled={!canResumeTask(selectedTask) || actionTaskId === selectedTask.id}
+                        type="button"
+                        onClick={() => void handleTaskAction('resume', selectedTask.id)}
+                      >
+                        恢复
+                      </button>
+                      <button
+                        className="ghost-button danger-button"
+                        disabled={actionTaskId === selectedTask.id}
+                        type="button"
+                        onClick={() => void handleTaskAction('delete', selectedTask.id)}
+                      >
+                        删除
+                      </button>
+                    </div>
 
                     <div className="task-detail-title-row">
                       <div>
