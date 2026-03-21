@@ -33,4 +33,4 @@
 - [ ] 资源健康评分
 - [ ] HTTP adapter
 - [ ] AI 诊断助手
-- [ ] README 补充运行说明
+- [x] README 补充运行说明

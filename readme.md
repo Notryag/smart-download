@@ -172,12 +172,68 @@ deleteTask(taskId: string): Promise<void>
 - 不鼓励未授权内容传播
 - 文案上避免“破解”“无限加速”等表述
 
+## 本地运行
+
+### 环境要求
+- Node.js 22.19 或更高版本
+- Windows 桌面环境（当前主要按 Windows 路径和流程开发）
+- `npm` 或 `pnpm`
+
+### 安装依赖
+
+```bash
+pnpm install
+```
+
+如果本地没有 `pnpm`，也可以使用：
+
+```bash
+npm install
+```
+
+### 启动开发环境
+
+```bash
+pnpm dev
+```
+
+或：
+
+```bash
+npm run dev
+```
+
+### 常用命令
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm build
+```
+
+对应的 `npm` 命令分别是：
+
+```bash
+npm run lint
+npm run typecheck
+npm run build
+```
+
 ## 当前仓库状态
 
-当前仓库仍处于文档和规划阶段。
-建议先落地以下顺序：
+当前仓库已经完成 Stage 1 和 Stage 2 的基础目标，包括：
 
-1. 初始化 Electron + React + TypeScript 项目
-2. 定义任务模型和 IPC
-3. 接入单一 BT adapter
-4. 完成任务创建、状态同步和列表展示
+1. magnet 任务创建
+2. 任务状态、进度、速度同步
+3. SQLite 持久化
+4. 启动恢复任务状态
+5. 基础网络检查
+6. 基础诊断摘要
+
+需要注意的是，当前 `BT adapter` 仍然是演示性质的内存实现，用来跑通主链路和状态流转：
+
+- 会校验 magnet 链接格式
+- 会模拟元数据获取、下载进度和完成状态
+- 不会真的接入完整 BT 协议栈下载真实文件
+
+因此，当前版本更适合验证 Electron / main / renderer / task manager 这条主链路，而不是验证真实 BT 下载能力。
