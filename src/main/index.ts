@@ -2,6 +2,9 @@ import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { InMemoryBtAdapter } from '../adapters'
+import { InMemoryLogger, InMemoryTaskManager } from '../core'
+import { SqliteDownloadTaskStore } from '../storage'
 import { registerDownloadTaskIpc } from './ipc/download-task'
 
 function createWindow(): void {
@@ -43,7 +46,16 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerDownloadTaskIpc()
+  const taskStore = new SqliteDownloadTaskStore(
+    join(app.getPath('userData'), 'storage', 'download-tasks.sqlite')
+  )
+  const taskManager = new InMemoryTaskManager(
+    new InMemoryBtAdapter(),
+    new InMemoryLogger(),
+    taskStore
+  )
+
+  registerDownloadTaskIpc(taskManager)
 
   createWindow()
 
@@ -51,6 +63,10 @@ app.whenReady().then(() => {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+
+  app.on('before-quit', () => {
+    taskStore.close()
   })
 })
 

@@ -1,11 +1,8 @@
 import { ipcMain } from 'electron'
-import { InMemoryBtAdapter } from '../../adapters'
-import { InMemoryLogger, InMemoryTaskManager } from '../../core'
+import type { InMemoryTaskManager } from '../../core'
 import { DOWNLOAD_TASK_IPC_CHANNELS, type DownloadTaskApi } from '../../types'
 
-const taskManager = new InMemoryTaskManager(new InMemoryBtAdapter(), new InMemoryLogger())
-
-export function registerDownloadTaskIpc(): void {
+export function registerDownloadTaskIpc(taskManager: InMemoryTaskManager): void {
   ipcMain.handle(
     DOWNLOAD_TASK_IPC_CHANNELS.createTask,
     async (_event, input: Parameters<DownloadTaskApi['createTask']>[0]) => {

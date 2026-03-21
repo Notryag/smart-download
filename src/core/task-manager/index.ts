@@ -1,5 +1,6 @@
 import { btSessionStateToTaskStatus, type BtAdapter, type BtTaskSnapshot } from '../../adapters'
 import type { InMemoryLogger } from '../logger'
+import type { DownloadTaskStore } from '../../storage'
 import type {
   CreateDownloadTaskInput,
   DeleteTaskInput,
@@ -28,6 +29,14 @@ function assertTaskField(value: string, fieldName: string): void {
 }
 
 function updateTask(task: DownloadTask, patch: Partial<DownloadTask>): DownloadTask {
+  const changed = (Object.keys(patch) as Array<keyof DownloadTask>).some(
+    (key) => task[key] !== patch[key]
+  )
+
+  if (!changed) {
+    return task
+  }
+
   return {
     ...task,
     ...patch,
@@ -74,13 +83,15 @@ export class InMemoryTaskManager {
 
   constructor(
     private readonly btAdapter: BtAdapter,
-    private readonly logger: InMemoryLogger
+    private readonly logger: InMemoryLogger,
+    private readonly taskStore: DownloadTaskStore
   ) {}
 
   async createTask(input: CreateDownloadTaskInput): Promise<DownloadTask> {
     const task = createPendingMagnetTask(input)
     this.tasks.set(task.id, task)
     this.logger.info('Created pending magnet task', task.id)
+    await this.taskStore.upsertTask(task)
 
     try {
       await this.btAdapter.attachTask({
@@ -94,6 +105,7 @@ export class InMemoryTaskManager {
       const startedTask = applySnapshot(task, startedSnapshot)
 
       this.tasks.set(task.id, startedTask)
+      await this.taskStore.upsertTask(startedTask)
       this.logger.info(`Started task in ${startedTask.status} state`, task.id)
 
       return startedTask
@@ -106,6 +118,7 @@ export class InMemoryTaskManager {
 
       this.tasks.set(task.id, failedTask)
       this.logger.error(message, task.id)
+      await this.persistTaskFailure(failedTask)
 
       throw error
     }
@@ -119,12 +132,17 @@ export class InMemoryTaskManager {
           const syncedTask = applySnapshot(task, snapshot)
           const statusChanged = syncedTask.status !== task.status
           const progressChanged = syncedTask.progress !== task.progress
+          const taskChanged = syncedTask !== task
 
           if (statusChanged || progressChanged) {
             this.logger.info(
               `Synced task state: ${syncedTask.status} (${Math.round(syncedTask.progress * 100)}%)`,
               task.id
             )
+          }
+
+          if (taskChanged) {
+            await this.taskStore.upsertTask(syncedTask)
           }
 
           return [task.id, syncedTask] as const
@@ -135,6 +153,7 @@ export class InMemoryTaskManager {
             errorMessage: message
           })
           this.logger.error(message, task.id)
+          await this.taskStore.upsertTask(failedTask)
 
           return [task.id, failedTask] as const
         }
@@ -157,15 +176,16 @@ export class InMemoryTaskManager {
       const pausedTask = applySnapshot(task, snapshot)
 
       this.tasks.set(task.id, pausedTask)
+      await this.taskStore.upsertTask(pausedTask)
       this.logger.info('Paused task', task.id)
     } catch (error) {
       const message = getErrorMessage(error, '暂停任务失败')
-      this.tasks.set(
-        task.id,
-        updateTask(task, {
-          errorMessage: message
-        })
-      )
+      const failedTask = updateTask(task, {
+        errorMessage: message
+      })
+
+      this.tasks.set(task.id, failedTask)
+      await this.taskStore.upsertTask(failedTask)
       this.logger.error(message, task.id)
       throw error
     }
@@ -178,15 +198,16 @@ export class InMemoryTaskManager {
       const resumedTask = applySnapshot(task, snapshot)
 
       this.tasks.set(task.id, resumedTask)
+      await this.taskStore.upsertTask(resumedTask)
       this.logger.info('Resumed task', task.id)
     } catch (error) {
       const message = getErrorMessage(error, '恢复任务失败')
-      this.tasks.set(
-        task.id,
-        updateTask(task, {
-          errorMessage: message
-        })
-      )
+      const failedTask = updateTask(task, {
+        errorMessage: message
+      })
+
+      this.tasks.set(task.id, failedTask)
+      await this.taskStore.upsertTask(failedTask)
       this.logger.error(message, task.id)
       throw error
     }
@@ -197,6 +218,7 @@ export class InMemoryTaskManager {
 
     await this.btAdapter.deleteTask(input)
     this.tasks.delete(input.taskId)
+    await this.taskStore.deleteTask(input.taskId)
     this.logger.info('Deleted task', input.taskId)
   }
 
@@ -208,5 +230,14 @@ export class InMemoryTaskManager {
     }
 
     return task
+  }
+
+  private async persistTaskFailure(task: DownloadTask): Promise<void> {
+    try {
+      await this.taskStore.upsertTask(task)
+    } catch (error) {
+      const message = getErrorMessage(error, '保存失败任务状态失败')
+      this.logger.error(message, task.id)
+    }
   }
 }
