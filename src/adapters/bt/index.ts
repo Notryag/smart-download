@@ -73,10 +73,13 @@ interface RuntimeSession {
   totalBytes: number
   downloadedBytes: number
   speedBytes: number
+  awaitingRemoteUntil?: number
   lastError?: string
   createdAt: string
   updatedAt: string
 }
+
+const REMOTE_TORRENT_VISIBILITY_GRACE_MS = 12_000
 
 function assertMagnetSource(source: string): void {
   if (!source.trim().startsWith('magnet:?')) {
@@ -170,6 +173,20 @@ function updateSession(session: RuntimeSession, patch: Partial<RuntimeSession>):
   }
 }
 
+function isAwaitingRemoteTorrent(session: RuntimeSession): boolean {
+  return typeof session.awaitingRemoteUntil === 'number' && session.awaitingRemoteUntil > Date.now()
+}
+
+function withRemoteVisibilityGrace(
+  session: RuntimeSession,
+  patch: Partial<RuntimeSession> = {}
+): RuntimeSession {
+  return updateSession(session, {
+    ...patch,
+    awaitingRemoteUntil: Date.now() + REMOTE_TORRENT_VISIBILITY_GRACE_MS
+  })
+}
+
 function mapQbittorrentState(
   state: string,
   progress: number
@@ -255,10 +272,15 @@ class QbittorrentWebUiClient {
     body.set('urls', source)
     body.set('savepath', savePath)
     body.set('paused', paused ? 'true' : 'false')
-    await this.request('/torrents/add', {
+
+    const responseText = await this.request<string>('/torrents/add', {
       method: 'POST',
       body
     })
+
+    if (responseText.trim().toLowerCase().startsWith('fails')) {
+      throw new Error('qBittorrent 未接受 magnet 任务，请检查 magnet 链接、保存目录或下载器权限。')
+    }
   }
 
   async getTorrent(infoHash: string): Promise<QbittorrentTorrentInfo | null> {
@@ -379,6 +401,7 @@ export class QbittorrentBtAdapter implements BtAdapter {
       totalBytes: 0,
       downloadedBytes: 0,
       speedBytes: 0,
+      awaitingRemoteUntil: Date.now() + REMOTE_TORRENT_VISIBILITY_GRACE_MS,
       createdAt: now,
       updatedAt: now
     }
@@ -415,7 +438,7 @@ export class QbittorrentBtAdapter implements BtAdapter {
     const session = this.getSessionOrThrow(input.taskId)
     await this.getClientOrThrow().resume(session.infoHash)
 
-    const nextSession = updateSession(session, {
+    const nextSession = withRemoteVisibilityGrace(session, {
       state: 'metadata',
       lastError: undefined
     })
@@ -434,6 +457,16 @@ export class QbittorrentBtAdapter implements BtAdapter {
         return buildSnapshot(session)
       }
 
+      if (isAwaitingRemoteTorrent(session)) {
+        return buildSnapshot(session)
+      }
+
+      if (typeof session.awaitingRemoteUntil === 'number') {
+        throw new Error(
+          'qBittorrent 未发现该 magnet 任务，请检查 WebUI 配置、保存目录或下载器日志。'
+        )
+      }
+
       throw new Error('qBittorrent 中未找到对应 torrent 任务')
     }
 
@@ -444,6 +477,7 @@ export class QbittorrentBtAdapter implements BtAdapter {
       totalBytes,
       downloadedBytes: Math.max(torrent.downloaded, 0),
       speedBytes: Math.max(torrent.dlspeed, 0),
+      awaitingRemoteUntil: undefined,
       lastError: stateResult.errorMessage
     })
 
@@ -476,7 +510,7 @@ export class QbittorrentBtAdapter implements BtAdapter {
   async resumeTask(input: TaskIdInput): Promise<BtTaskSnapshot> {
     const session = this.getSessionOrThrow(input.taskId)
     await this.getClientOrThrow().resume(session.infoHash)
-    const nextSession = updateSession(session, {
+    const nextSession = withRemoteVisibilityGrace(session, {
       state: 'metadata',
       lastError: undefined
     })
