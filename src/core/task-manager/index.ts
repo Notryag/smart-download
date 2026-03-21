@@ -1,3 +1,4 @@
+import type { BtAdapter } from '../../adapters'
 import type {
   CreateDownloadTaskInput,
   DeleteTaskInput,
@@ -54,8 +55,17 @@ export function createPendingMagnetTask(input: CreateDownloadTaskInput): Downloa
 export class InMemoryTaskManager {
   private readonly tasks = new Map<string, DownloadTask>()
 
-  createTask(input: CreateDownloadTaskInput): DownloadTask {
+  constructor(private readonly btAdapter: BtAdapter) {}
+
+  async createTask(input: CreateDownloadTaskInput): Promise<DownloadTask> {
     const task = createPendingMagnetTask(input)
+
+    await this.btAdapter.attachTask({
+      taskId: task.id,
+      source: task.source,
+      savePath: task.savePath,
+      name: task.name
+    })
 
     this.tasks.set(task.id, task)
 
@@ -68,22 +78,29 @@ export class InMemoryTaskManager {
     )
   }
 
-  pauseTask(input: TaskIdInput): void {
+  async pauseTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
     const nextStatus = task.status === 'completed' ? task.status : 'paused'
 
+    await this.btAdapter.pauseTask(input)
+
     this.tasks.set(task.id, updateTask(task, { status: nextStatus }))
   }
 
-  resumeTask(input: TaskIdInput): void {
+  async resumeTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
     const nextStatus = task.status === 'completed' ? task.status : 'pending'
 
+    await this.btAdapter.resumeTask(input)
+
     this.tasks.set(task.id, updateTask(task, { status: nextStatus }))
   }
 
-  deleteTask(input: DeleteTaskInput): void {
+  async deleteTask(input: DeleteTaskInput): Promise<void> {
     this.getTaskOrThrow(input.taskId)
+
+    await this.btAdapter.deleteTask(input)
+
     this.tasks.delete(input.taskId)
   }
 
