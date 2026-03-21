@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import type { CreateDownloadTaskInput } from '../../types'
+import type { CreateDownloadTaskInput, DownloadTask } from '../../types'
 
 const DEFAULT_FORM: CreateDownloadTaskInput = {
   source: '',
@@ -13,12 +13,76 @@ function isMagnetLink(value: string): boolean {
   return value.trim().startsWith('magnet:?')
 }
 
+function formatBytes(value: number): string {
+  if (value <= 0) {
+    return '0 B'
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const unitIndex = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1)
+  const normalized = value / 1024 ** unitIndex
+
+  return `${normalized.toFixed(normalized >= 100 ? 0 : 1)} ${units[unitIndex]}`
+}
+
+function formatProgress(value: number): string {
+  return `${Math.round(value * 100)}%`
+}
+
+function formatStatus(status: DownloadTask['status']): string {
+  switch (status) {
+    case 'metadata':
+      return '获取元数据中'
+    case 'downloading':
+      return '下载中'
+    case 'paused':
+      return '已暂停'
+    case 'completed':
+      return '已完成'
+    case 'failed':
+      return '失败'
+    case 'canceled':
+      return '已取消'
+    case 'pending':
+    default:
+      return '等待中'
+  }
+}
+
 function App(): React.JSX.Element {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true)
+  const [tasks, setTasks] = useState<DownloadTask[]>([])
   const [form, setForm] = useState<CreateDownloadTaskInput>(DEFAULT_FORM)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [listErrorMessage, setListErrorMessage] = useState('')
+
+  async function loadTasks(): Promise<void> {
+    try {
+      const nextTasks = await window.api.listTasks()
+      setTasks(nextTasks)
+      setListErrorMessage('')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '加载任务列表失败'
+      setListErrorMessage(message)
+    } finally {
+      setIsLoadingTasks(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadTasks()
+
+    const timer = window.setInterval(() => {
+      void loadTasks()
+    }, 1000)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [])
 
   function openModal(): void {
     setIsModalOpen(true)
@@ -67,6 +131,7 @@ function App(): React.JSX.Element {
       setSuccessMessage(`任务已创建，ID: ${result.taskId}`)
       setForm(DEFAULT_FORM)
       setIsModalOpen(false)
+      await loadTasks()
     } catch (error) {
       const message = error instanceof Error ? error.message : '创建任务失败'
       setErrorMessage(message)
@@ -103,7 +168,7 @@ function App(): React.JSX.Element {
             <ul className="check-list">
               <li>Main、preload、renderer 进程边界已经分开。</li>
               <li>任务类型和 IPC 合同已经定义完成。</li>
-              <li>新建任务弹窗已接入主进程创建接口。</li>
+              <li>任务列表会轮询主进程的同步状态。</li>
             </ul>
           </article>
 
@@ -113,11 +178,73 @@ function App(): React.JSX.Element {
               <h2>Magnet flow</h2>
             </header>
             <ol className="step-list">
-              <li>接入单一 BT adapter。</li>
-              <li>创建任务后推进到真实下载状态。</li>
-              <li>补任务列表和详情面板。</li>
+              <li>补任务详情基础信息。</li>
+              <li>增加基础错误提示。</li>
+              <li>继续完善 pause / resume / delete。</li>
             </ol>
           </article>
+        </section>
+
+        <section className="task-section panel">
+          <header className="task-section-header">
+            <div>
+              <span className="panel-kicker">Task list</span>
+              <h2>下载任务</h2>
+            </div>
+            <span className="task-count">{tasks.length} 个任务</span>
+          </header>
+
+          {listErrorMessage ? <p className="feedback error">{listErrorMessage}</p> : null}
+
+          {isLoadingTasks ? <p className="empty-state">正在加载任务列表...</p> : null}
+
+          {!isLoadingTasks && tasks.length === 0 ? (
+            <p className="empty-state">还没有任务。先创建一个 magnet 下载任务。</p>
+          ) : null}
+
+          {!isLoadingTasks && tasks.length > 0 ? (
+            <div className="task-list">
+              {tasks.map((task) => (
+                <article key={task.id} className="task-card">
+                  <div className="task-card-header">
+                    <div>
+                      <strong>{task.name}</strong>
+                      <p>{task.id}</p>
+                    </div>
+                    <span className={`status-badge status-${task.status}`}>
+                      {formatStatus(task.status)}
+                    </span>
+                  </div>
+
+                  <div className="task-progress-row">
+                    <div className="task-progress-bar">
+                      <span style={{ width: `${task.progress * 100}%` }} />
+                    </div>
+                    <strong>{formatProgress(task.progress)}</strong>
+                  </div>
+
+                  <dl className="task-meta-grid">
+                    <div>
+                      <dt>速度</dt>
+                      <dd>{formatBytes(task.speedBytes)}/s</dd>
+                    </div>
+                    <div>
+                      <dt>已下载</dt>
+                      <dd>{formatBytes(task.downloadedBytes)}</dd>
+                    </div>
+                    <div>
+                      <dt>总大小</dt>
+                      <dd>{task.totalBytes ? formatBytes(task.totalBytes) : '待确定'}</dd>
+                    </div>
+                    <div>
+                      <dt>剩余</dt>
+                      <dd>{typeof task.etaSeconds === 'number' ? `${task.etaSeconds}s` : '--'}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          ) : null}
         </section>
 
         <section className="status-strip">
