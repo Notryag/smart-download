@@ -8,14 +8,12 @@ import type { DownloadTask, TaskIdInput } from '../../types'
 import type { LogContext } from '../../core'
 import type { Aria2ClientConfig, Aria2RpcResponse, Aria2TellStatusResult } from './types'
 import { Aria2RuntimeSessionStore } from './runtime-session-store'
+import { Aria2StateWaiter } from './state-waiter'
 import {
   ARIA2_DIAGNOSTIC_LOG_INTERVAL_MS,
-  ARIA2_STATE_SETTLE_INTERVAL_MS,
-  ARIA2_STATE_SETTLE_TIMEOUT_MS,
   assertSource,
   buildSnapshot,
   buildSourcePreview,
-  delay,
   getErrorMessage,
   isSettledTaskStatus,
   toIsoNow,
@@ -96,6 +94,7 @@ export class Aria2RpcClient {
 export class Aria2DownloadAdapter implements DownloadAdapter {
   private readonly client: Aria2RpcClient | null
   private readonly sessionStore = new Aria2RuntimeSessionStore()
+  private readonly stateWaiter: Aria2StateWaiter
   private readonly lastTaskErrorLog = new Map<string, string>()
   private readonly lastZeroSpeedLogAt = new Map<string, number>()
 
@@ -105,6 +104,10 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     private readonly logger?: AdapterLogger
   ) {
     this.client = config ? new Aria2RpcClient(config) : null
+    this.stateWaiter = new Aria2StateWaiter(
+      (input) => this.getTaskSnapshot(input),
+      logger
+    )
   }
 
   async getRuntimeStatus(): Promise<DownloadAdapterRuntimeStatus> {
@@ -257,7 +260,10 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       taskId: input.taskId
     })
     await this.getClientOrThrow().pause(session.gid)
-    return this.waitForSnapshot(input, (snapshot) => isSettledTaskStatus(snapshot.status))
+    return this.stateWaiter.waitForSnapshot(
+      input,
+      (snapshot) => isSettledTaskStatus(snapshot.status)
+    )
   }
 
   async resumeTask(input: TaskIdInput): Promise<DownloadTaskSnapshot> {
@@ -270,7 +276,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       taskId: input.taskId
     })
     await this.getClientOrThrow().unpause(session.gid)
-    return this.waitForSnapshot(
+    return this.stateWaiter.waitForSnapshot(
       input,
       (snapshot) =>
         snapshot.status === 'metadata' ||
@@ -319,32 +325,6 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     }
 
     return this.client
-  }
-
-  private async waitForSnapshot(
-    input: TaskIdInput,
-    predicate: (snapshot: DownloadTaskSnapshot) => boolean
-  ): Promise<DownloadTaskSnapshot> {
-    const deadline = Date.now() + ARIA2_STATE_SETTLE_TIMEOUT_MS
-
-    while (Date.now() < deadline) {
-      const snapshot = await this.getTaskSnapshot(input)
-
-      if (predicate(snapshot)) {
-        return snapshot
-      }
-
-      await delay(ARIA2_STATE_SETTLE_INTERVAL_MS)
-    }
-
-    this.logger?.warning('aria2 task did not reach expected state before timeout', {
-      category: 'aria2-adapter',
-      details: {
-        timeoutMs: ARIA2_STATE_SETTLE_TIMEOUT_MS
-      },
-      taskId: input.taskId
-    })
-    return this.getTaskSnapshot(input)
   }
 
   private maybeLogSnapshot(result: Aria2TellStatusResult, snapshot: DownloadTaskSnapshot): void {

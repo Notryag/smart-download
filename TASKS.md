@@ -49,6 +49,7 @@
 - [x] 增强日志与诊断上下文，方便排查任务卡住问题
 - [x] 拆分 aria2 adapter 的运行时 session 管理
 - [x] 移除 Prettier，统一改为 ESLint（含 antfu）收口代码风格
+- [x] 拆分 aria2 adapter 的状态等待逻辑
 
 ## Backlog
 
