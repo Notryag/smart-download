@@ -1,11 +1,13 @@
-import type { CreateDownloadTaskInput, TaskIdInput } from '../../types'
+import type { CreateDownloadTaskInput, DownloadTaskStatus, TaskIdInput } from '../../types'
+
+export type BtSessionState = 'attached' | 'metadata' | 'downloading' | 'paused'
 
 export interface BtAdapterSession {
   id: string
   taskId: string
   source: string
   savePath: string
-  state: 'attached' | 'paused'
+  state: BtSessionState
   createdAt: string
   updatedAt: string
 }
@@ -16,14 +18,37 @@ export interface AttachBtTaskInput extends CreateDownloadTaskInput {
 
 export interface BtAdapter {
   attachTask(input: AttachBtTaskInput): Promise<BtAdapterSession>
-  pauseTask(input: TaskIdInput): Promise<void>
-  resumeTask(input: TaskIdInput): Promise<void>
+  startTask(input: TaskIdInput): Promise<BtAdapterSession>
+  pauseTask(input: TaskIdInput): Promise<BtAdapterSession>
+  resumeTask(input: TaskIdInput): Promise<BtAdapterSession>
   deleteTask(input: TaskIdInput): Promise<void>
 }
 
 function assertMagnetSource(source: string): void {
   if (!source.trim().startsWith('magnet:?')) {
     throw new Error('BT adapter only supports magnet links')
+  }
+}
+
+function withSessionState(session: BtAdapterSession, state: BtSessionState): BtAdapterSession {
+  return {
+    ...session,
+    state,
+    updatedAt: new Date().toISOString()
+  }
+}
+
+export function btSessionStateToTaskStatus(state: BtSessionState): DownloadTaskStatus {
+  switch (state) {
+    case 'metadata':
+      return 'metadata'
+    case 'downloading':
+      return 'downloading'
+    case 'paused':
+      return 'paused'
+    case 'attached':
+    default:
+      return 'pending'
   }
 }
 
@@ -49,24 +74,31 @@ export class InMemoryBtAdapter implements BtAdapter {
     return session
   }
 
-  async pauseTask(input: TaskIdInput): Promise<void> {
+  async startTask(input: TaskIdInput): Promise<BtAdapterSession> {
     const session = this.getSessionOrThrow(input.taskId)
+    const nextSession = withSessionState(session, 'metadata')
 
-    this.sessions.set(input.taskId, {
-      ...session,
-      state: 'paused',
-      updatedAt: new Date().toISOString()
-    })
+    this.sessions.set(input.taskId, nextSession)
+
+    return nextSession
   }
 
-  async resumeTask(input: TaskIdInput): Promise<void> {
+  async pauseTask(input: TaskIdInput): Promise<BtAdapterSession> {
     const session = this.getSessionOrThrow(input.taskId)
+    const nextSession = withSessionState(session, 'paused')
 
-    this.sessions.set(input.taskId, {
-      ...session,
-      state: 'attached',
-      updatedAt: new Date().toISOString()
-    })
+    this.sessions.set(input.taskId, nextSession)
+
+    return nextSession
+  }
+
+  async resumeTask(input: TaskIdInput): Promise<BtAdapterSession> {
+    const session = this.getSessionOrThrow(input.taskId)
+    const nextSession = withSessionState(session, 'metadata')
+
+    this.sessions.set(input.taskId, nextSession)
+
+    return nextSession
   }
 
   async deleteTask(input: TaskIdInput): Promise<void> {

@@ -1,4 +1,4 @@
-import type { BtAdapter } from '../../adapters'
+import { btSessionStateToTaskStatus, type BtAdapter } from '../../adapters'
 import type {
   CreateDownloadTaskInput,
   DeleteTaskInput,
@@ -67,9 +67,14 @@ export class InMemoryTaskManager {
       name: task.name
     })
 
-    this.tasks.set(task.id, task)
+    const startedSession = await this.btAdapter.startTask({ taskId: task.id })
+    const startedTask = updateTask(task, {
+      status: btSessionStateToTaskStatus(startedSession.state)
+    })
 
-    return task
+    this.tasks.set(task.id, startedTask)
+
+    return startedTask
   }
 
   listTasks(): DownloadTask[] {
@@ -80,18 +85,18 @@ export class InMemoryTaskManager {
 
   async pauseTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
-    const nextStatus = task.status === 'completed' ? task.status : 'paused'
-
-    await this.btAdapter.pauseTask(input)
+    const session = await this.btAdapter.pauseTask(input)
+    const nextStatus =
+      task.status === 'completed' ? task.status : btSessionStateToTaskStatus(session.state)
 
     this.tasks.set(task.id, updateTask(task, { status: nextStatus }))
   }
 
   async resumeTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
-    const nextStatus = task.status === 'completed' ? task.status : 'pending'
-
-    await this.btAdapter.resumeTask(input)
+    const session = await this.btAdapter.resumeTask(input)
+    const nextStatus =
+      task.status === 'completed' ? task.status : btSessionStateToTaskStatus(session.state)
 
     this.tasks.set(task.id, updateTask(task, { status: nextStatus }))
   }
