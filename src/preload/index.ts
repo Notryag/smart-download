@@ -1,12 +1,25 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import { DOWNLOAD_TASK_IPC_CHANNELS, type DownloadTaskApi } from '../types'
 
-// Custom APIs for renderer
-const api = {}
+const api: DownloadTaskApi = {
+  createTask(input) {
+    return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.createTask, input)
+  },
+  listTasks() {
+    return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.listTasks)
+  },
+  pauseTask(input) {
+    return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.pauseTask, input)
+  },
+  resumeTask(input) {
+    return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.resumeTask, input)
+  },
+  deleteTask(input) {
+    return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.deleteTask, input)
+  }
+}
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
@@ -15,8 +28,11 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
+  const windowWithApi = window as typeof window & {
+    electron: typeof electronAPI
+    api: DownloadTaskApi
+  }
+
+  windowWithApi.electron = electronAPI
+  windowWithApi.api = api
 }

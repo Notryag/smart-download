@@ -4,8 +4,8 @@
 
 ### 基础
 - [x] 初始化 Electron + React + TypeScript 项目
-- [ ] 定义 DownloadTask 类型和任务状态
-- [ ] 设计 main <-> renderer 的 IPC 接口
+- [x] 定义 DownloadTask 类型和任务状态
+- [x] 设计 main <-> renderer 的 IPC 接口
 
 ### 核心链路
 - [ ] 新建任务弹窗：输入 magnet 和保存目录
