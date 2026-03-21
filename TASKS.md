@@ -1,0 +1,36 @@
+# TASKS.md
+
+## Stage 1: Magnet MVP
+
+### 基础
+- [ ] 初始化 Electron + React + TypeScript 项目
+- [ ] 定义 DownloadTask 类型和任务状态
+- [ ] 设计 main <-> renderer 的 IPC 接口
+
+### 核心链路
+- [ ] 新建任务弹窗：输入 magnet 和保存目录
+- [ ] 接入单一 BT adapter
+- [ ] 创建并启动 magnet 下载任务
+- [ ] 同步任务状态、进度、速度
+
+### 交互
+- [ ] 任务列表页
+- [ ] 任务详情基础信息
+- [ ] 基础错误提示
+
+### 补全
+- [ ] pause / resume / delete
+- [ ] 基础日志
+
+## Stage 2: Stability
+- [ ] SQLite 持久化
+- [ ] 启动时恢复任务状态
+- [ ] 基础网络检查
+- [ ] 基础诊断摘要
+
+## Backlog
+- [ ] 诊断面板
+- [ ] 资源健康评分
+- [ ] HTTP adapter
+- [ ] AI 诊断助手
+- [ ] README 补充运行说明
