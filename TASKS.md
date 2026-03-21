@@ -1,17 +1,17 @@
 # TASKS.md
 
-## Stage 1: Magnet MVP
+## Stage 1: Aria2 MVP
 
 ### 基础
 - [x] 初始化 Electron + React + TypeScript 项目
 - [x] 定义 DownloadTask 类型和任务状态
 - [x] 设计 main <-> renderer 的 IPC 接口
-- [x] 设计外部下载器配置读取（qBittorrent / aria2）
+- [x] 设计 aria2 RPC 配置读取
 
 ### 核心链路
-- [x] 新建任务弹窗：输入 magnet 和保存目录
-- [ ] 接入 qBittorrent WebUI BT adapter
-- [ ] 创建并启动真实 magnet 下载任务
+- [x] 新建任务弹窗：输入下载地址和保存目录
+- [x] 接入 aria2 RPC adapter
+- [ ] 创建并启动真实 aria2 下载任务
 - [ ] 下载文件落盘到 savePath
 - [ ] 同步真实任务状态、进度、速度
 
@@ -27,12 +27,12 @@
 ## Stage 2: Stability
 - [x] SQLite 持久化
 - [x] 启动时恢复任务状态
-- [x] 基础网络检查
+- [x] 基础引擎检查
 - [x] 基础诊断摘要
 
 ## Backlog
 - [ ] 诊断面板
 - [ ] 资源健康评分
-- [ ] aria2 HTTP adapter
+- [ ] qBittorrent BT adapter
 - [ ] AI 诊断助手
 - [x] README 补充运行说明

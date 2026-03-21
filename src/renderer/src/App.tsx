@@ -9,8 +9,19 @@ const DEFAULT_FORM: CreateDownloadTaskInput = {
   name: ''
 }
 
-function isMagnetLink(value: string): boolean {
-  return value.trim().startsWith('magnet:?')
+function isSupportedSource(value: string): boolean {
+  const normalized = value.trim()
+
+  if (normalized.startsWith('magnet:?')) {
+    return true
+  }
+
+  try {
+    const url = new URL(normalized)
+    return ['http:', 'https:', 'ftp:'].includes(url.protocol)
+  } catch {
+    return false
+  }
 }
 
 function formatBytes(value: number): string {
@@ -142,8 +153,8 @@ function App(): React.JSX.Element {
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
 
-    if (!isMagnetLink(form.source)) {
-      setErrorMessage('请输入有效的 magnet 链接。')
+    if (!isSupportedSource(form.source)) {
+      setErrorMessage('请输入 aria2 支持的下载地址，例如 https://... 或 magnet:?...')
       return
     }
 
@@ -218,17 +229,16 @@ function App(): React.JSX.Element {
     <>
       <main className="app-shell">
         <section className="hero">
-          <p className="eyebrow">Stage 1 · Magnet MVP</p>
+          <p className="eyebrow">Stage 1 · Aria2 MVP</p>
           <h1>Smart Download</h1>
           <p className="hero-copy">
-            Electron + React + TypeScript skeleton is in place. The next milestone is to wire a
-            single BT adapter and run the magnet download flow end to end.
+            第一版先统一走 aria2。当前先把任务创建、任务列表、状态同步和基础诊断这条主链路跑通。
           </p>
           <div className="hero-actions">
             <button className="primary-button" type="button" onClick={openModal}>
-              新建 magnet 任务
+              新建下载任务
             </button>
-            <p className="hero-hint">当前阶段先跑通任务创建、状态同步和单一 BT 引擎接入。</p>
+            <p className="hero-hint">当前任务统一由 aria2 RPC 托管，renderer 只做展示和交互。</p>
           </div>
           {successMessage ? <p className="feedback success">{successMessage}</p> : null}
         </section>
@@ -275,9 +285,9 @@ function App(): React.JSX.Element {
                 </dl>
 
                 <p
-                  className={`feedback diagnostic-feedback ${diagnostics.network.ready ? 'success' : 'error'}`}
+                  className={`feedback diagnostic-feedback ${diagnostics.runtime.ready ? 'success' : 'error'}`}
                 >
-                  {diagnostics.network.message}
+                  {diagnostics.runtime.message}
                 </p>
 
                 {diagnostics.highlights.length > 0 ? (
@@ -316,7 +326,7 @@ function App(): React.JSX.Element {
           {isLoadingTasks ? <p className="empty-state">正在加载任务列表...</p> : null}
 
           {!isLoadingTasks && tasks.length === 0 ? (
-            <p className="empty-state">还没有任务。先创建一个 magnet 下载任务。</p>
+            <p className="empty-state">还没有任务。先创建一个下载任务。</p>
           ) : null}
 
           {!isLoadingTasks && tasks.length > 0 ? (
@@ -364,7 +374,11 @@ function App(): React.JSX.Element {
                       </div>
                       <div>
                         <dt>总大小</dt>
-                        <dd>{task.totalBytes ? formatBytes(task.totalBytes) : '待确定'}</dd>
+                        <dd>
+                          {typeof task.totalBytes === 'number'
+                            ? formatBytes(task.totalBytes)
+                            : '待确定'}
+                        </dd>
                       </div>
                       <div>
                         <dt>剩余</dt>
@@ -452,6 +466,10 @@ function App(): React.JSX.Element {
                         <dd className="break-all">{selectedTask.source}</dd>
                       </div>
                       <div>
+                        <dt>远端任务 ID</dt>
+                        <dd className="break-all">{selectedTask.remoteId ?? '待分配'}</dd>
+                      </div>
+                      <div>
                         <dt>下载进度</dt>
                         <dd>{formatProgress(selectedTask.progress)}</dd>
                       </div>
@@ -486,8 +504,8 @@ function App(): React.JSX.Element {
             <span className="status-label">Diagnostics</span>
             <strong>
               {diagnostics
-                ? diagnostics.network.ready
-                  ? 'Network Ready'
+                ? diagnostics.runtime.ready
+                  ? 'Aria2 Ready'
                   : 'Attention Needed'
                 : 'Loading'}
             </strong>
@@ -535,7 +553,7 @@ function App(): React.JSX.Element {
             <header className="modal-header">
               <div>
                 <span className="panel-kicker">Create task</span>
-                <h2 id="new-task-title">新建 magnet 任务</h2>
+                <h2 id="new-task-title">新建下载任务</h2>
               </div>
               <button
                 aria-label="关闭新建任务弹窗"
@@ -549,9 +567,9 @@ function App(): React.JSX.Element {
 
             <form className="task-form" onSubmit={handleSubmit}>
               <label className="field">
-                <span>Magnet 链接</span>
+                <span>下载地址</span>
                 <textarea
-                  placeholder="magnet:?xt=urn:btih:..."
+                  placeholder="https://example.com/file.zip 或 magnet:?xt=urn:btih:..."
                   rows={4}
                   value={form.source}
                   onChange={(event) => updateField('source', event.target.value)}

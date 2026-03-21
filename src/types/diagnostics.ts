@@ -18,8 +18,9 @@ export interface DiagnosticLogEntry {
 export interface DiagnosticSummary {
   checkedAt: string
   overview: string
-  network: {
+  runtime: {
     ready: boolean
+    client: string
     message: string
   }
   taskStats: {

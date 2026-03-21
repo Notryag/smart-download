@@ -1,6 +1,5 @@
-import { btSessionStateToTaskStatus, type BtAdapter, type BtTaskSnapshot } from '../../adapters'
+import type { DownloadAdapter, DownloadTaskSnapshot } from '../../adapters'
 import type { InMemoryLogger } from '../logger'
-import type { NetworkChecker } from '../network'
 import type { DownloadTaskStore } from '../../storage'
 import {
   isFinishedDownloadTaskStatus,
@@ -23,7 +22,7 @@ function buildTaskName(input: CreateDownloadTaskInput): string {
     return trimmedName
   }
 
-  return 'Magnet Task'
+  return 'Download Task'
 }
 
 function assertTaskField(value: string, fieldName: string): void {
@@ -48,16 +47,21 @@ function updateTask(task: DownloadTask, patch: Partial<DownloadTask>): DownloadT
   }
 }
 
-function applySnapshot(task: DownloadTask, snapshot: BtTaskSnapshot): DownloadTask {
+function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot): DownloadTask {
   return updateTask(task, {
-    status: btSessionStateToTaskStatus(snapshot.state),
+    remoteId: snapshot.remoteId ?? task.remoteId,
+    status: snapshot.status,
     progress: snapshot.progress,
     downloadedBytes: snapshot.downloadedBytes,
     totalBytes: snapshot.totalBytes,
     speedBytes: snapshot.speedBytes,
     etaSeconds: snapshot.etaSeconds,
-    errorMessage: undefined
+    errorMessage: snapshot.errorMessage
   })
+}
+
+function resolveTaskType(source: string): DownloadTask['type'] {
+  return source.trim().startsWith('magnet:?') ? 'magnet' : 'uri'
 }
 
 export function createPendingMagnetTask(input: CreateDownloadTaskInput): DownloadTask {
@@ -69,9 +73,9 @@ export function createPendingMagnetTask(input: CreateDownloadTaskInput): Downloa
   return {
     id: crypto.randomUUID(),
     name: buildTaskName(input),
-    type: 'magnet',
+    type: resolveTaskType(input.source),
     source: input.source.trim(),
-    engine: 'qbittorrent',
+    engine: 'aria2',
     status: 'pending',
     savePath: input.savePath.trim(),
     progress: 0,
@@ -119,17 +123,16 @@ export class InMemoryTaskManager {
   private readonly tasks = new Map<string, DownloadTask>()
 
   constructor(
-    private readonly btAdapter: BtAdapter,
+    private readonly downloadAdapter: DownloadAdapter,
     private readonly logger: InMemoryLogger,
-    private readonly taskStore: DownloadTaskStore,
-    private readonly networkChecker: NetworkChecker
+    private readonly taskStore: DownloadTaskStore
   ) {}
 
   async restoreTasks(): Promise<void> {
     const persistedTasks = await this.taskStore.listTasks()
 
     for (const task of persistedTasks) {
-      const restoredTask = restoreTaskState(task)
+      let restoredTask = restoreTaskState(task)
       this.tasks.set(restoredTask.id, restoredTask)
 
       if (restoredTask !== task) {
@@ -137,7 +140,18 @@ export class InMemoryTaskManager {
       }
 
       if (needsRuntimeSession(restoredTask)) {
-        await this.btAdapter.hydrateTask(restoredTask)
+        try {
+          await this.downloadAdapter.hydrateTask(restoredTask)
+        } catch (error) {
+          const message = getErrorMessage(error, '恢复 aria2 会话失败')
+          restoredTask = updateTask(restoredTask, {
+            status: 'failed',
+            errorMessage: message
+          })
+          this.tasks.set(restoredTask.id, restoredTask)
+          await this.taskStore.upsertTask(restoredTask)
+          this.logger.error(message, restoredTask.id)
+        }
       }
     }
 
@@ -146,22 +160,30 @@ export class InMemoryTaskManager {
 
   async createTask(input: CreateDownloadTaskInput): Promise<DownloadTask> {
     const task = createPendingMagnetTask(input)
+    let currentTask = task
     this.tasks.set(task.id, task)
-    this.logger.info('Created pending magnet task', task.id)
+    this.logger.info('Created pending download task', task.id)
     await this.taskStore.upsertTask(task)
 
     try {
-      await this.networkChecker.assertBtNetworkReady()
+      await this.downloadAdapter.assertReady()
 
-      await this.btAdapter.attachTask({
+      const attachedSession = await this.downloadAdapter.attachTask({
         taskId: task.id,
         source: task.source,
         savePath: task.savePath,
         name: task.name
       })
+      const attachedTask = updateTask(task, {
+        remoteId: attachedSession.remoteId,
+        errorMessage: undefined
+      })
+      currentTask = attachedTask
+      this.tasks.set(task.id, attachedTask)
+      await this.taskStore.upsertTask(attachedTask)
 
-      const startedSnapshot = await this.btAdapter.startTask({ taskId: task.id })
-      const startedTask = applySnapshot(task, startedSnapshot)
+      const startedSnapshot = await this.downloadAdapter.startTask({ taskId: task.id })
+      const startedTask = applySnapshot(attachedTask, startedSnapshot)
 
       this.tasks.set(task.id, startedTask)
       await this.taskStore.upsertTask(startedTask)
@@ -170,7 +192,7 @@ export class InMemoryTaskManager {
       return startedTask
     } catch (error) {
       const message = getErrorMessage(error, '创建下载任务失败')
-      const failedTask = updateTask(task, {
+      const failedTask = updateTask(currentTask, {
         status: 'failed',
         errorMessage: message
       })
@@ -191,7 +213,7 @@ export class InMemoryTaskManager {
         }
 
         try {
-          const snapshot = await this.btAdapter.getTaskSnapshot({ taskId: task.id })
+          const snapshot = await this.downloadAdapter.getTaskSnapshot({ taskId: task.id })
           const syncedTask = applySnapshot(task, snapshot)
           const statusChanged = syncedTask.status !== task.status
           const progressChanged = syncedTask.progress !== task.progress
@@ -241,7 +263,7 @@ export class InMemoryTaskManager {
   async pauseTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
     try {
-      const snapshot = await this.btAdapter.pauseTask(input)
+      const snapshot = await this.downloadAdapter.pauseTask(input)
       const pausedTask = applySnapshot(task, snapshot)
 
       this.tasks.set(task.id, pausedTask)
@@ -263,9 +285,9 @@ export class InMemoryTaskManager {
   async resumeTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
     try {
-      await this.networkChecker.assertBtNetworkReady()
+      await this.downloadAdapter.assertReady()
 
-      const snapshot = await this.btAdapter.resumeTask(input)
+      const snapshot = await this.downloadAdapter.resumeTask(input)
       const resumedTask = applySnapshot(task, snapshot)
 
       this.tasks.set(task.id, resumedTask)
@@ -288,7 +310,7 @@ export class InMemoryTaskManager {
     const task = this.getTaskOrThrow(input.taskId)
 
     try {
-      await this.btAdapter.deleteTask(input)
+      await this.downloadAdapter.deleteTask(input)
     } catch (error) {
       if (!isFinishedDownloadTaskStatus(task.status)) {
         throw error

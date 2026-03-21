@@ -1,4 +1,4 @@
-export const DOWNLOAD_TASK_TYPES = ['magnet'] as const
+export const DOWNLOAD_TASK_TYPES = ['uri', 'magnet'] as const
 
 export type DownloadTaskType = (typeof DOWNLOAD_TASK_TYPES)[number]
 
@@ -32,6 +32,7 @@ export interface DownloadTask {
   type: DownloadTaskType
   source: string
   engine: DownloadEngine
+  remoteId?: string
   status: DownloadTaskStatus
   savePath: string
   progress: number

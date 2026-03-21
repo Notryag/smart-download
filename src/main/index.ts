@@ -2,15 +2,10 @@ import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { QbittorrentBtAdapter } from '../adapters'
-import {
-  BasicDiagnosticsService,
-  DnsNetworkChecker,
-  InMemoryLogger,
-  InMemoryTaskManager
-} from '../core'
+import { Aria2DownloadAdapter } from '../adapters'
+import { BasicDiagnosticsService, InMemoryLogger, InMemoryTaskManager } from '../core'
 import { SqliteDownloadTaskStore } from '../storage'
-import { readAria2ClientConfig, readQbittorrentClientConfig } from './config/download-clients'
+import { readAria2ClientConfig } from './config/download-clients'
 import { registerDownloadTaskIpc } from './ipc/download-task'
 
 function createWindow(): void {
@@ -56,16 +51,9 @@ app.whenReady().then(() => {
     join(app.getPath('userData'), 'storage', 'download-tasks.sqlite')
   )
   const logger = new InMemoryLogger()
-  const networkChecker = new DnsNetworkChecker()
-  const qBittorrentConfig = readQbittorrentClientConfig()
-  readAria2ClientConfig()
-  const taskManager = new InMemoryTaskManager(
-    new QbittorrentBtAdapter(qBittorrentConfig),
-    logger,
-    taskStore,
-    networkChecker
-  )
-  const diagnosticsService = new BasicDiagnosticsService(networkChecker)
+  const aria2Adapter = new Aria2DownloadAdapter(readAria2ClientConfig())
+  const taskManager = new InMemoryTaskManager(aria2Adapter, logger, taskStore)
+  const diagnosticsService = new BasicDiagnosticsService(aria2Adapter)
 
   return taskManager.restoreTasks().then(() => {
     registerDownloadTaskIpc(taskManager, diagnosticsService, () => logger.listEntries())

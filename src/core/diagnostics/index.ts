@@ -1,10 +1,10 @@
 import type { DownloadTask, DiagnosticLogEntry, DiagnosticSummary } from '../../types'
+import type { DownloadAdapter } from '../../adapters'
 import type { LogEntry } from '../logger'
-import type { NetworkChecker } from '../network'
 
-function buildOverview(summary: DiagnosticSummary['taskStats'], networkReady: boolean): string {
-  if (!networkReady) {
-    return `网络检查失败，当前共有 ${summary.total} 个任务需要关注。`
+function buildOverview(summary: DiagnosticSummary['taskStats'], runtimeReady: boolean): string {
+  if (!runtimeReady) {
+    return `下载引擎检查失败，当前共有 ${summary.total} 个任务需要关注。`
   }
 
   if (summary.failed > 0) {
@@ -37,10 +37,10 @@ function toDiagnosticLogEntry(entry: LogEntry): DiagnosticLogEntry {
 }
 
 export class BasicDiagnosticsService {
-  constructor(private readonly networkChecker: NetworkChecker) {}
+  constructor(private readonly downloadAdapter: DownloadAdapter) {}
 
   async getSummary(tasks: DownloadTask[], logEntries: LogEntry[]): Promise<DiagnosticSummary> {
-    const network = await this.networkChecker.getBtNetworkStatus()
+    const runtime = await this.downloadAdapter.getRuntimeStatus()
     const failedTasks = tasks.filter((task) => task.status === 'failed')
     const pausedTasks = tasks.filter((task) => task.status === 'paused')
     const taskStats = {
@@ -53,13 +53,13 @@ export class BasicDiagnosticsService {
     }
 
     const highlights = [
-      ...(!network.ready
+      ...(!runtime.ready
         ? [
             {
-              id: 'network',
+              id: 'runtime',
               severity: 'error' as const,
-              title: 'BT 网络不可用',
-              detail: network.message
+              title: 'aria2 不可用',
+              detail: runtime.message
             }
           ]
         : []),
@@ -82,8 +82,8 @@ export class BasicDiagnosticsService {
 
     return {
       checkedAt: new Date().toISOString(),
-      overview: buildOverview(taskStats, network.ready),
-      network,
+      overview: buildOverview(taskStats, runtime.ready),
+      runtime,
       taskStats,
       highlights,
       recentLogs: logEntries.slice(0, 5).map(toDiagnosticLogEntry)
