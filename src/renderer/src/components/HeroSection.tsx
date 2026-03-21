@@ -9,7 +9,7 @@ export function HeroSection({ successMessage, onCreateTask }: HeroSectionProps):
       <p className="eyebrow">Stage 1 · Aria2 MVP</p>
       <h1>Smart Download</h1>
       <p className="hero-copy">
-        第一版先统一走 aria2。当前先把任务创建、任务列表、状态同步和基础诊断这条主链路跑通。
+        第一版先统一走 aria2，并收口到 magnet 主链路。当前先把任务创建、状态同步和基础诊断跑通。
       </p>
       <div className="hero-actions">
         <button className="primary-button" type="button" onClick={onCreateTask}>

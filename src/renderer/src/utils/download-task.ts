@@ -1,18 +1,7 @@
 import type { DownloadTask } from '../../../types'
 
 export function isSupportedSource(value: string): boolean {
-  const normalized = value.trim()
-
-  if (normalized.startsWith('magnet:?')) {
-    return true
-  }
-
-  try {
-    const url = new URL(normalized)
-    return ['http:', 'https:', 'ftp:'].includes(url.protocol)
-  } catch {
-    return false
-  }
+  return value.trim().startsWith('magnet:?')
 }
 
 export function formatBytes(value: number): string {

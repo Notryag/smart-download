@@ -92,7 +92,7 @@ function App(): React.JSX.Element {
     event.preventDefault()
 
     if (!isSupportedSource(form.source)) {
-      setErrorMessage('请输入 aria2 支持的下载地址，例如 https://... 或 magnet:?...')
+      setErrorMessage('当前阶段仅支持 magnet 链接，请输入以 magnet:? 开头的下载地址。')
       return
     }
 

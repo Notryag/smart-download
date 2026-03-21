@@ -32,6 +32,12 @@ function assertTaskField(value: string, fieldName: string): void {
   }
 }
 
+function assertSupportedSource(source: string): void {
+  if (!source.trim().startsWith('magnet:?')) {
+    throw new Error('当前阶段仅支持 magnet 下载任务。请输入以 magnet:? 开头的链接。')
+  }
+}
+
 function updateTask(task: DownloadTask, patch: Partial<DownloadTask>): DownloadTask {
   const changed = (Object.keys(patch) as Array<keyof DownloadTask>).some(
     (key) => task[key] !== patch[key]
@@ -68,6 +74,7 @@ function resolveTaskType(source: string): DownloadTask['type'] {
 export function createPendingMagnetTask(input: CreateDownloadTaskInput): DownloadTask {
   assertTaskField(input.source, 'source')
   assertTaskField(input.savePath, 'savePath')
+  assertSupportedSource(input.source)
 
   const now = new Date().toISOString()
 

@@ -52,7 +52,7 @@ export function NewTaskModal({
           <label className="field">
             <span>下载地址</span>
             <textarea
-              placeholder="https://example.com/file.zip 或 magnet:?xt=urn:btih:..."
+              placeholder="magnet:?xt=urn:btih:..."
               rows={4}
               value={form.source}
               onChange={(event) => onFieldChange('source', event.target.value)}
