@@ -1,134 +1,29 @@
-import type { DownloadAdapter, DownloadTaskSnapshot } from '../../adapters'
+import type { DownloadAdapter } from '../../adapters'
 import type { InMemoryLogger } from '../logger'
 import type { DownloadTaskStore } from '../../storage'
 import {
-  isFinishedDownloadTaskStatus,
   type CreateDownloadTaskInput,
   type DeleteTaskInput,
   type DownloadTask,
   type TaskIdInput
 } from '../../types'
+import {
+  applySnapshot,
+  buildSourcePreview,
+  createPendingMagnetTask,
+  getErrorMessage,
+  needsRuntimeSession,
+  restoreTaskState,
+  updateTask
+} from './task-utils'
+import { isFinishedDownloadTaskStatus } from '../../types'
 
-const RESTART_RECOVERY_MESSAGE = '应用重启后下载已停止，请手动恢复任务'
 const CREATE_TASK_ROLLBACK_FAILED_MESSAGE = '创建任务失败，且清理远端下载任务失败'
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
-}
-
-function buildTaskName(input: CreateDownloadTaskInput): string {
-  const trimmedName = input.name?.trim()
-
-  if (trimmedName) {
-    return trimmedName
-  }
-
-  return 'Download Task'
-}
-
-function assertTaskField(value: string, fieldName: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${fieldName} is required`)
-  }
-}
-
-function assertSupportedSource(source: string): void {
-  if (!source.trim().startsWith('magnet:?')) {
-    throw new Error('当前阶段仅支持 magnet 下载任务。请输入以 magnet:? 开头的链接。')
-  }
-}
-
-function updateTask(task: DownloadTask, patch: Partial<DownloadTask>): DownloadTask {
-  const changed = (Object.keys(patch) as Array<keyof DownloadTask>).some(
-    (key) => task[key] !== patch[key]
-  )
-
-  if (!changed) {
-    return task
-  }
-
-  return {
-    ...task,
-    ...patch,
-    updatedAt: new Date().toISOString()
-  }
-}
-
-function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot): DownloadTask {
-  return updateTask(task, {
-    remoteId: snapshot.remoteId ?? task.remoteId,
-    status: snapshot.status,
-    progress: snapshot.progress,
-    downloadedBytes: snapshot.downloadedBytes,
-    totalBytes: snapshot.totalBytes,
-    speedBytes: snapshot.speedBytes,
-    etaSeconds: snapshot.etaSeconds,
-    errorMessage: snapshot.errorMessage
-  })
-}
-
-function resolveTaskType(source: string): DownloadTask['type'] {
-  return source.trim().startsWith('magnet:?') ? 'magnet' : 'uri'
-}
-
-export function createPendingMagnetTask(input: CreateDownloadTaskInput): DownloadTask {
-  assertTaskField(input.source, 'source')
-  assertTaskField(input.savePath, 'savePath')
-  assertSupportedSource(input.source)
-
-  const now = new Date().toISOString()
-
-  return {
-    id: crypto.randomUUID(),
-    name: buildTaskName(input),
-    type: resolveTaskType(input.source),
-    source: input.source.trim(),
-    engine: 'aria2',
-    status: 'pending',
-    savePath: input.savePath.trim(),
-    progress: 0,
-    speedBytes: 0,
-    downloadedBytes: 0,
-    createdAt: now,
-    updatedAt: now
-  }
-}
-
-function needsRuntimeSession(task: DownloadTask): boolean {
-  return task.status === 'paused'
-}
-
-function restoreTaskState(task: DownloadTask): DownloadTask {
-  const shouldPauseAfterRestart = ['pending', 'metadata', 'downloading'].includes(task.status)
-
-  if (shouldPauseAfterRestart) {
-    return updateTask(task, {
-      status: 'paused',
-      speedBytes: 0,
-      etaSeconds: undefined,
-      errorMessage: RESTART_RECOVERY_MESSAGE
-    })
-  }
-
-  if (task.status === 'paused') {
-    return updateTask(task, {
-      speedBytes: 0,
-      etaSeconds: undefined
-    })
-  }
-
-  if (isFinishedDownloadTaskStatus(task.status)) {
-    return updateTask(task, {
-      speedBytes: 0,
-      etaSeconds: undefined
-    })
-  }
-
-  return task
-}
+const TASK_STALL_LOG_INTERVAL_MS = 30_000
 
 export class InMemoryTaskManager {
   private readonly tasks = new Map<string, DownloadTask>()
+  private readonly lastStallLoggedAt = new Map<string, number>()
 
   constructor(
     private readonly downloadAdapter: DownloadAdapter,
@@ -158,19 +53,39 @@ export class InMemoryTaskManager {
           })
           this.tasks.set(restoredTask.id, restoredTask)
           await this.taskStore.upsertTask(restoredTask)
-          this.logger.error(message, restoredTask.id)
+          this.logger.error(message, {
+            category: 'task-manager',
+            details: {
+              remoteId: restoredTask.remoteId ?? null,
+              status: restoredTask.status
+            },
+            taskId: restoredTask.id
+          })
         }
       }
     }
 
-    this.logger.info(`Restored ${persistedTasks.length} persisted tasks`)
+    this.logger.info(`Restored ${persistedTasks.length} persisted tasks`, {
+      category: 'task-manager',
+      details: {
+        count: persistedTasks.length
+      }
+    })
   }
 
   async createTask(input: CreateDownloadTaskInput): Promise<DownloadTask> {
     const task = createPendingMagnetTask(input)
     let currentTask = task
     this.tasks.set(task.id, task)
-    this.logger.info('Created pending download task', task.id)
+    this.logger.info('Created pending download task', {
+      category: 'task-manager',
+      details: {
+        savePath: task.savePath,
+        sourcePreview: buildSourcePreview(task.source),
+        type: task.type
+      },
+      taskId: task.id
+    })
     await this.taskStore.upsertTask(task)
 
     try {
@@ -189,13 +104,30 @@ export class InMemoryTaskManager {
       currentTask = attachedTask
       this.tasks.set(task.id, attachedTask)
       await this.taskStore.upsertTask(attachedTask)
+      this.logger.info('Attached task to remote download engine', {
+        category: 'task-manager',
+        details: {
+          remoteId: attachedTask.remoteId ?? null,
+          savePath: attachedTask.savePath
+        },
+        taskId: task.id
+      })
 
       const startedSnapshot = await this.downloadAdapter.startTask({ taskId: task.id })
       const startedTask = applySnapshot(attachedTask, startedSnapshot)
 
       this.tasks.set(task.id, startedTask)
       await this.taskStore.upsertTask(startedTask)
-      this.logger.info(`Started task in ${startedTask.status} state`, task.id)
+      this.logger.info(`Started task in ${startedTask.status} state`, {
+        category: 'task-manager',
+        details: {
+          downloadedBytes: startedTask.downloadedBytes,
+          remoteId: startedTask.remoteId ?? null,
+          speedBytes: startedTask.speedBytes,
+          totalBytes: startedTask.totalBytes ?? null
+        },
+        taskId: task.id
+      })
 
       return startedTask
     } catch (error) {
@@ -231,9 +163,20 @@ export class InMemoryTaskManager {
           if (statusChanged || progressChanged) {
             this.logger.info(
               `Synced task state: ${syncedTask.status} (${Math.round(syncedTask.progress * 100)}%)`,
-              task.id
+              {
+                category: 'task-manager',
+                details: {
+                  downloadedBytes: syncedTask.downloadedBytes,
+                  remoteId: syncedTask.remoteId ?? null,
+                  speedBytes: syncedTask.speedBytes,
+                  totalBytes: syncedTask.totalBytes ?? null
+                },
+                taskId: task.id
+              }
             )
           }
+
+          this.maybeLogStalledTask(task, syncedTask)
 
           if (taskChanged) {
             await this.taskStore.upsertTask(syncedTask)
@@ -246,7 +189,14 @@ export class InMemoryTaskManager {
             status: 'failed',
             errorMessage: message
           })
-          this.logger.error(message, task.id)
+          this.logger.error(message, {
+            category: 'task-manager',
+            details: {
+              remoteId: task.remoteId ?? null,
+              status: task.status
+            },
+            taskId: task.id
+          })
           await this.taskStore.upsertTask(failedTask)
 
           return [task.id, failedTask] as const
@@ -277,7 +227,14 @@ export class InMemoryTaskManager {
 
       this.tasks.set(task.id, pausedTask)
       await this.taskStore.upsertTask(pausedTask)
-      this.logger.info('Paused task', task.id)
+      this.logger.info('Paused task', {
+        category: 'task-manager',
+        details: {
+          remoteId: pausedTask.remoteId ?? null,
+          status: pausedTask.status
+        },
+        taskId: task.id
+      })
     } catch (error) {
       const message = getErrorMessage(error, '暂停任务失败')
       const failedTask = updateTask(task, {
@@ -286,7 +243,13 @@ export class InMemoryTaskManager {
 
       this.tasks.set(task.id, failedTask)
       await this.taskStore.upsertTask(failedTask)
-      this.logger.error(message, task.id)
+      this.logger.error(message, {
+        category: 'task-manager',
+        details: {
+          remoteId: task.remoteId ?? null
+        },
+        taskId: task.id
+      })
       throw error
     }
   }
@@ -301,7 +264,14 @@ export class InMemoryTaskManager {
 
       this.tasks.set(task.id, resumedTask)
       await this.taskStore.upsertTask(resumedTask)
-      this.logger.info('Resumed task', task.id)
+      this.logger.info('Resumed task', {
+        category: 'task-manager',
+        details: {
+          remoteId: resumedTask.remoteId ?? null,
+          status: resumedTask.status
+        },
+        taskId: task.id
+      })
     } catch (error) {
       const message = getErrorMessage(error, '恢复任务失败')
       const failedTask = updateTask(task, {
@@ -310,7 +280,13 @@ export class InMemoryTaskManager {
 
       this.tasks.set(task.id, failedTask)
       await this.taskStore.upsertTask(failedTask)
-      this.logger.error(message, task.id)
+      this.logger.error(message, {
+        category: 'task-manager',
+        details: {
+          remoteId: task.remoteId ?? null
+        },
+        taskId: task.id
+      })
       throw error
     }
   }
@@ -328,7 +304,14 @@ export class InMemoryTaskManager {
 
     this.tasks.delete(input.taskId)
     await this.taskStore.deleteTask(input.taskId)
-    this.logger.info('Deleted task', input.taskId)
+    this.logger.info('Deleted task', {
+      category: 'task-manager',
+      details: {
+        remoteId: task.remoteId ?? null,
+        status: task.status
+      },
+      taskId: input.taskId
+    })
   }
 
   private getTaskOrThrow(taskId: string): DownloadTask {
@@ -346,25 +329,53 @@ export class InMemoryTaskManager {
       await this.taskStore.upsertTask(task)
     } catch (error) {
       const message = getErrorMessage(error, '保存失败任务状态失败')
-      this.logger.error(message, task.id)
+      this.logger.error(message, {
+        category: 'storage',
+        details: {
+          remoteId: task.remoteId ?? null,
+          status: task.status
+        },
+        taskId: task.id
+      })
     }
   }
 
   private async rollbackCreatedTask(task: DownloadTask): Promise<DownloadTask> {
     if (!task.remoteId) {
-      this.logger.error(task.errorMessage ?? '创建下载任务失败', task.id)
+      this.logger.error(task.errorMessage ?? '创建下载任务失败', {
+        category: 'task-manager',
+        details: {
+          remoteId: null,
+          stage: 'create'
+        },
+        taskId: task.id
+      })
       return task
     }
 
     try {
       await this.downloadAdapter.deleteTask({ taskId: task.id })
-      this.logger.info('Rolled back remote download task after create failure', task.id)
+      this.logger.info('Rolled back remote download task after create failure', {
+        category: 'task-manager',
+        details: {
+          remoteId: task.remoteId,
+          stage: 'create'
+        },
+        taskId: task.id
+      })
 
       const rolledBackTask = updateTask(task, {
         remoteId: undefined
       })
       this.tasks.set(task.id, rolledBackTask)
-      this.logger.error(rolledBackTask.errorMessage ?? '创建下载任务失败', task.id)
+      this.logger.error(rolledBackTask.errorMessage ?? '创建下载任务失败', {
+        category: 'task-manager',
+        details: {
+          remoteId: null,
+          stage: 'create'
+        },
+        taskId: task.id
+      })
 
       return rolledBackTask
     } catch (rollbackError) {
@@ -377,9 +388,48 @@ export class InMemoryTaskManager {
       })
 
       this.tasks.set(task.id, taskWithRollbackError)
-      this.logger.error(errorMessage, task.id)
+      this.logger.error(errorMessage, {
+        category: 'task-manager',
+        details: {
+          remoteId: task.remoteId,
+          stage: 'rollback'
+        },
+        taskId: task.id
+      })
 
       return taskWithRollbackError
     }
+  }
+
+  private maybeLogStalledTask(previousTask: DownloadTask, nextTask: DownloadTask): void {
+    const isPotentiallyStalled =
+      ['metadata', 'downloading'].includes(nextTask.status) &&
+      nextTask.speedBytes === 0 &&
+      nextTask.downloadedBytes === previousTask.downloadedBytes
+
+    if (!isPotentiallyStalled) {
+      this.lastStallLoggedAt.delete(nextTask.id)
+      return
+    }
+
+    const now = Date.now()
+    const lastLoggedAt = this.lastStallLoggedAt.get(nextTask.id) ?? 0
+
+    if (now - lastLoggedAt < TASK_STALL_LOG_INTERVAL_MS) {
+      return
+    }
+
+    this.lastStallLoggedAt.set(nextTask.id, now)
+    this.logger.warning('Task has no progress and zero download speed', {
+      category: 'task-manager',
+      details: {
+        downloadedBytes: nextTask.downloadedBytes,
+        remoteId: nextTask.remoteId ?? null,
+        savePath: nextTask.savePath,
+        status: nextTask.status,
+        totalBytes: nextTask.totalBytes ?? null
+      },
+      taskId: nextTask.id
+    })
   }
 }

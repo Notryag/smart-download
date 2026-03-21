@@ -29,6 +29,8 @@ function buildOverview(summary: DiagnosticSummary['taskStats'], runtimeReady: bo
 function toDiagnosticLogEntry(entry: LogEntry): DiagnosticLogEntry {
   return {
     id: entry.id,
+    category: entry.category,
+    details: entry.details,
     level: entry.level,
     message: entry.message,
     taskId: entry.taskId,

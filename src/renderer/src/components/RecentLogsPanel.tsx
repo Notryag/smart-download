@@ -21,13 +21,16 @@ export function RecentLogsPanel({ diagnostics }: RecentLogsPanelProps): React.JS
           {diagnostics.recentLogs.map((entry) => (
             <article
               key={entry.id}
-              className={`diagnostic-item diagnostic-${entry.level === 'error' ? 'error' : 'info'}`}
+              className={`diagnostic-item diagnostic-${entry.level === 'error' ? 'error' : entry.level === 'warning' ? 'warning' : 'info'}`}
             >
               <strong>
-                {formatLogLevel(entry.level)}
+                {formatLogLevel(entry.level)} · {entry.category}
                 {entry.taskId ? ` · ${entry.taskId}` : ''}
               </strong>
               <p>{entry.message}</p>
+              {entry.details ? (
+                <p className="diagnostic-meta">{formatLogDetails(entry.details)}</p>
+              ) : null}
               <span className="diagnostic-time">{formatDate(entry.createdAt)}</span>
             </article>
           ))}
@@ -37,4 +40,10 @@ export function RecentLogsPanel({ diagnostics }: RecentLogsPanelProps): React.JS
       )}
     </section>
   )
+}
+
+function formatLogDetails(details: Record<string, string | number | boolean | null>): string {
+  return Object.entries(details)
+    .map(([key, value]) => `${key}=${value === null ? 'null' : String(value)}`)
+    .join(' · ')
 }

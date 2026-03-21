@@ -4,136 +4,32 @@ import type {
   DownloadAdapterSession,
   DownloadTaskSnapshot
 } from '../download'
-import type { DownloadTask, DownloadTaskStatus, TaskIdInput } from '../../types'
+import type { DownloadTask, TaskIdInput } from '../../types'
+import type { LogContext } from '../../core'
+import type {
+  Aria2ClientConfig,
+  Aria2RpcResponse,
+  Aria2TellStatusResult,
+  RuntimeSession
+} from './types'
+import {
+  ARIA2_DIAGNOSTIC_LOG_INTERVAL_MS,
+  ARIA2_STATE_SETTLE_INTERVAL_MS,
+  ARIA2_STATE_SETTLE_TIMEOUT_MS,
+  assertSource,
+  buildSnapshot,
+  buildSourcePreview,
+  delay,
+  getErrorMessage,
+  isSettledTaskStatus,
+  toIsoNow,
+  toRuntimeStatusMessage
+} from './utils'
 
-export interface Aria2ClientConfig {
-  rpcUrl: string
-  secret?: string
-}
-
-interface Aria2RpcResponse<T> {
-  result?: T
-  error?: {
-    code: number
-    message: string
-  }
-}
-
-export interface Aria2TellStatusResult {
-  gid: string
-  status: string
-  totalLength: string
-  completedLength: string
-  downloadSpeed: string
-  errorCode?: string
-  errorMessage?: string
-  dir?: string
-}
-
-interface RuntimeSession {
-  taskId: string
-  gid: string
-  source: string
-  savePath: string
-  createdAt: string
-  updatedAt: string
-}
-
-const ARIA2_STATE_SETTLE_TIMEOUT_MS = 5_000
-const ARIA2_STATE_SETTLE_INTERVAL_MS = 150
-
-function toIsoNow(): string {
-  return new Date().toISOString()
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
-}
-
-function assertSource(source: string): void {
-  if (source.trim().length === 0) {
-    throw new Error('下载地址不能为空。')
-  }
-}
-
-function parseBytes(value: string | undefined): number {
-  const parsed = Number.parseInt(value ?? '0', 10)
-  return Number.isFinite(parsed) ? Math.max(parsed, 0) : 0
-}
-
-function parseEtaSeconds(
-  totalBytes: number,
-  downloadedBytes: number,
-  speedBytes: number
-): number | undefined {
-  if (speedBytes <= 0 || totalBytes <= 0) {
-    return undefined
-  }
-
-  const remainingBytes = Math.max(totalBytes - downloadedBytes, 0)
-  return Math.ceil(remainingBytes / speedBytes)
-}
-
-function mapAria2Status(source: string, status: string, totalBytes: number): DownloadTaskStatus {
-  switch (status) {
-    case 'active':
-      return source.startsWith('magnet:?') && totalBytes === 0 ? 'metadata' : 'downloading'
-    case 'waiting':
-      return 'pending'
-    case 'paused':
-      return 'paused'
-    case 'complete':
-      return 'completed'
-    case 'removed':
-      return 'canceled'
-    case 'error':
-      return 'failed'
-    default:
-      return 'pending'
-  }
-}
-
-function toRuntimeStatusMessage(error: unknown): string {
-  const message = getErrorMessage(error, 'aria2 RPC 不可用')
-
-  if (message.includes('fetch failed')) {
-    return '无法连接 aria2 RPC。请确认 aria2 已启动，并已启用 RPC。'
-  }
-
-  return `aria2 RPC 检查失败：${message}`
-}
-
-function isSettledTaskStatus(status: DownloadTaskStatus): boolean {
-  return ['paused', 'completed', 'failed', 'canceled'].includes(status)
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function buildSnapshot(
-  session: RuntimeSession,
-  result: Aria2TellStatusResult
-): DownloadTaskSnapshot {
-  const totalBytes = parseBytes(result.totalLength)
-  const downloadedBytes = parseBytes(result.completedLength)
-  const status = mapAria2Status(session.source, result.status, totalBytes)
-  const speedBytes =
-    status === 'downloading' || status === 'metadata' ? parseBytes(result.downloadSpeed) : 0
-  const progress = totalBytes > 0 ? Math.min(downloadedBytes / totalBytes, 1) : 0
-
-  return {
-    taskId: session.taskId,
-    remoteId: session.gid,
-    status,
-    totalBytes,
-    downloadedBytes,
-    speedBytes,
-    progress,
-    etaSeconds: parseEtaSeconds(totalBytes, downloadedBytes, speedBytes),
-    errorMessage: result.errorMessage,
-    updatedAt: toIsoNow()
-  }
+interface AdapterLogger {
+  info(message: string, context?: LogContext | string): void
+  warning(message: string, context?: LogContext | string): void
+  error(message: string, context?: LogContext | string): void
 }
 
 export class Aria2RpcClient {
@@ -204,10 +100,13 @@ export class Aria2RpcClient {
 export class Aria2DownloadAdapter implements DownloadAdapter {
   private readonly sessions = new Map<string, RuntimeSession>()
   private readonly client: Aria2RpcClient | null
+  private readonly lastTaskErrorLog = new Map<string, string>()
+  private readonly lastZeroSpeedLogAt = new Map<string, number>()
 
   constructor(
     config: Aria2ClientConfig | null,
-    private readonly unavailableMessage = '未配置 aria2 RPC。'
+    private readonly unavailableMessage = '未配置 aria2 RPC。',
+    private readonly logger?: AdapterLogger
   ) {
     this.client = config ? new Aria2RpcClient(config) : null
   }
@@ -223,10 +122,19 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
 
     try {
       const version = await this.client.getVersion()
+
+      if (!version.enabledFeatures.includes('BitTorrent')) {
+        return {
+          ready: false,
+          client: 'aria2',
+          message: `aria2 RPC 已连接，但未启用 BitTorrent 功能。当前无法下载 magnet 任务。`
+        }
+      }
+
       return {
         ready: true,
         client: 'aria2',
-        message: `aria2 RPC 已连接，版本 ${version.version}。`
+        message: `aria2 RPC 已连接，版本 ${version.version}，已启用 BitTorrent。`
       }
     } catch (error) {
       return {
@@ -254,6 +162,14 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     assertSource(input.source)
     const client = this.getClientOrThrow()
     const now = toIsoNow()
+    this.logger?.info('Submitting task to aria2 RPC', {
+      category: 'aria2-adapter',
+      details: {
+        savePath: input.savePath.trim(),
+        sourcePreview: buildSourcePreview(input.source)
+      },
+      taskId: input.taskId
+    })
     const gid = await client.addUri([input.source.trim()], {
       dir: input.savePath.trim(),
       pause: 'true'
@@ -269,6 +185,14 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     }
 
     this.sessions.set(input.taskId, session)
+    this.logger?.info('aria2 accepted task and returned remote GID', {
+      category: 'aria2-adapter',
+      details: {
+        gid,
+        savePath: session.savePath
+      },
+      taskId: input.taskId
+    })
 
     const snapshot = await this.getTaskSnapshot({ taskId: input.taskId })
     return {
@@ -304,6 +228,14 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     }
 
     this.sessions.set(task.id, session)
+    this.logger?.info('Hydrated aria2 runtime session from persisted task', {
+      category: 'aria2-adapter',
+      details: {
+        gid: task.remoteId,
+        status: task.status
+      },
+      taskId: task.id
+    })
 
     return {
       id: crypto.randomUUID(),
@@ -328,6 +260,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     const session = this.getSessionOrThrow(input.taskId)
     const result = await this.getClientOrThrow().tellStatus(session.gid)
     const snapshot = buildSnapshot(session, result)
+    this.maybeLogSnapshot(result, snapshot)
 
     this.sessions.set(input.taskId, {
       ...session,
@@ -339,12 +272,26 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
 
   async pauseTask(input: TaskIdInput): Promise<DownloadTaskSnapshot> {
     const session = this.getSessionOrThrow(input.taskId)
+    this.logger?.info('Sending pause command to aria2', {
+      category: 'aria2-adapter',
+      details: {
+        gid: session.gid
+      },
+      taskId: input.taskId
+    })
     await this.getClientOrThrow().pause(session.gid)
     return this.waitForSnapshot(input, (snapshot) => isSettledTaskStatus(snapshot.status))
   }
 
   async resumeTask(input: TaskIdInput): Promise<DownloadTaskSnapshot> {
     const session = this.getSessionOrThrow(input.taskId)
+    this.logger?.info('Sending resume command to aria2', {
+      category: 'aria2-adapter',
+      details: {
+        gid: session.gid
+      },
+      taskId: input.taskId
+    })
     await this.getClientOrThrow().unpause(session.gid)
     return this.waitForSnapshot(
       input,
@@ -358,6 +305,13 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
   async deleteTask(input: TaskIdInput): Promise<void> {
     const session = this.getSessionOrThrow(input.taskId)
     const client = this.getClientOrThrow()
+    this.logger?.info('Deleting aria2 task', {
+      category: 'aria2-adapter',
+      details: {
+        gid: session.gid
+      },
+      taskId: input.taskId
+    })
 
     try {
       await client.remove(session.gid)
@@ -416,6 +370,65 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       await delay(ARIA2_STATE_SETTLE_INTERVAL_MS)
     }
 
+    this.logger?.warning('aria2 task did not reach expected state before timeout', {
+      category: 'aria2-adapter',
+      details: {
+        timeoutMs: ARIA2_STATE_SETTLE_TIMEOUT_MS
+      },
+      taskId: input.taskId
+    })
     return this.getTaskSnapshot(input)
   }
+
+  private maybeLogSnapshot(result: Aria2TellStatusResult, snapshot: DownloadTaskSnapshot): void {
+    if (result.errorCode || result.errorMessage || snapshot.status === 'failed') {
+      const errorSignature = `${result.status}:${result.errorCode ?? ''}:${result.errorMessage ?? ''}`
+
+      if (this.lastTaskErrorLog.get(snapshot.taskId) !== errorSignature) {
+        this.lastTaskErrorLog.set(snapshot.taskId, errorSignature)
+        this.logger?.error('aria2 reported task error state', {
+          category: 'aria2-adapter',
+          details: {
+            aria2Status: result.status,
+            errorCode: result.errorCode ?? null,
+            errorMessage: result.errorMessage ?? null,
+            gid: result.gid
+          },
+          taskId: snapshot.taskId
+        })
+      }
+
+      return
+    }
+
+    this.lastTaskErrorLog.delete(snapshot.taskId)
+
+    if (
+      (snapshot.status === 'metadata' || snapshot.status === 'downloading') &&
+      snapshot.speedBytes === 0
+    ) {
+      const now = Date.now()
+      const lastLoggedAt = this.lastZeroSpeedLogAt.get(snapshot.taskId) ?? 0
+
+      if (now - lastLoggedAt >= ARIA2_DIAGNOSTIC_LOG_INTERVAL_MS) {
+        this.lastZeroSpeedLogAt.set(snapshot.taskId, now)
+        this.logger?.warning('aria2 task is active but currently has zero download speed', {
+          category: 'aria2-adapter',
+          details: {
+            aria2Status: result.status,
+            downloadedBytes: snapshot.downloadedBytes,
+            gid: result.gid,
+            totalBytes: snapshot.totalBytes
+          },
+          taskId: snapshot.taskId
+        })
+      }
+
+      return
+    }
+
+    this.lastZeroSpeedLogAt.delete(snapshot.taskId)
+  }
 }
+
+export type { Aria2ClientConfig, Aria2TellStatusResult } from './types'

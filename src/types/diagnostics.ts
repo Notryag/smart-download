@@ -9,7 +9,9 @@ export interface DiagnosticHighlight {
 
 export interface DiagnosticLogEntry {
   id: string
-  level: 'info' | 'error'
+  category: string
+  level: 'info' | 'warning' | 'error'
+  details?: Record<string, string | number | boolean | null>
   message: string
   taskId?: string
   createdAt: string

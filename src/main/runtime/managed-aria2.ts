@@ -98,7 +98,12 @@ export class ManagedAria2Service {
 
   async start(externalConfig: Aria2ClientConfig | null): Promise<ManagedAria2StartResult> {
     if (externalConfig) {
-      this.logger.info('Using external aria2 RPC from environment variables')
+      this.logger.info('Using external aria2 RPC from environment variables', {
+        category: 'aria2-runtime',
+        details: {
+          rpcUrl: externalConfig.rpcUrl
+        }
+      })
       return { config: externalConfig }
     }
 
@@ -118,6 +123,15 @@ export class ManagedAria2Service {
         rpcUrl: `http://127.0.0.1:${port}/jsonrpc`,
         secret
       }
+      this.logger.info('Starting managed aria2 runtime', {
+        category: 'aria2-runtime',
+        details: {
+          binaryPath,
+          downloadDir,
+          rpcUrl: this.managedConfig.rpcUrl,
+          sessionPath
+        }
+      })
 
       const args = [
         '--enable-rpc=true',
@@ -142,36 +156,48 @@ export class ManagedAria2Service {
       this.child = child
 
       child.once('error', (error) => {
-        this.logger.error(`Managed aria2c spawn failed: ${error.message}`)
+        this.logger.error(`Managed aria2c spawn failed: ${error.message}`, {
+          category: 'aria2-runtime'
+        })
       })
 
       child.stdout?.on('data', (chunk) => {
         const message = chunk.toString().trim()
         if (message) {
-          this.logger.info(`[aria2c] ${message}`)
+          this.logger.info(`[aria2c] ${message}`, {
+            category: 'aria2-runtime'
+          })
         }
       })
 
       child.stderr?.on('data', (chunk) => {
         const message = chunk.toString().trim()
         if (message) {
-          this.logger.error(`[aria2c] ${message}`)
+          this.logger.error(`[aria2c] ${message}`, {
+            category: 'aria2-runtime'
+          })
         }
       })
 
       child.once('exit', (code, signal) => {
         const detail = signal ? `signal=${signal}` : `code=${code ?? 'unknown'}`
-        this.logger.info(`Managed aria2c exited (${detail})`)
+        this.logger.info(`Managed aria2c exited (${detail})`, {
+          category: 'aria2-runtime'
+        })
         this.child = null
       })
 
       await this.waitUntilReady(this.managedConfig)
-      this.logger.info(`Managed aria2 RPC ready at ${this.managedConfig.rpcUrl}`)
+      this.logger.info(`Managed aria2 RPC ready at ${this.managedConfig.rpcUrl}`, {
+        category: 'aria2-runtime'
+      })
 
       return { config: this.managedConfig }
     } catch (error) {
       const message = error instanceof Error ? error.message : '内置 aria2 启动失败'
-      this.logger.error(message)
+      this.logger.error(message, {
+        category: 'aria2-runtime'
+      })
       this.stop()
       this.managedConfig = null
 

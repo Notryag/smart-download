@@ -46,8 +46,16 @@ export function formatDate(value: string): string {
   })
 }
 
-export function formatLogLevel(level: 'info' | 'error'): string {
-  return level === 'error' ? '错误' : '信息'
+export function formatLogLevel(level: 'info' | 'warning' | 'error'): string {
+  if (level === 'error') {
+    return '错误'
+  }
+
+  if (level === 'warning') {
+    return '警告'
+  }
+
+  return '信息'
 }
 
 export function canPauseTask(task: DownloadTask): boolean {

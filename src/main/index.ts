@@ -90,7 +90,8 @@ app.whenReady().then(() => {
     const aria2Adapter = new Aria2DownloadAdapter(
       startup.config,
       startup.unavailableMessage ??
-        '未能连接内置 aria2。请确认资源目录中的 aria2c 二进制存在且可执行。'
+        '未能连接内置 aria2。请确认资源目录中的 aria2c 二进制存在且可执行。',
+      logger
     )
     const taskManager = new InMemoryTaskManager(aria2Adapter, logger, taskStore)
     const diagnosticsService = new BasicDiagnosticsService(aria2Adapter)
