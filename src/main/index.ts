@@ -2,7 +2,7 @@ import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { InMemoryBtAdapter } from '../adapters'
+import { QbittorrentBtAdapter } from '../adapters'
 import {
   BasicDiagnosticsService,
   DnsNetworkChecker,
@@ -10,6 +10,7 @@ import {
   InMemoryTaskManager
 } from '../core'
 import { SqliteDownloadTaskStore } from '../storage'
+import { readAria2ClientConfig, readQbittorrentClientConfig } from './config/download-clients'
 import { registerDownloadTaskIpc } from './ipc/download-task'
 
 function createWindow(): void {
@@ -56,8 +57,10 @@ app.whenReady().then(() => {
   )
   const logger = new InMemoryLogger()
   const networkChecker = new DnsNetworkChecker()
+  const qBittorrentConfig = readQbittorrentClientConfig()
+  readAria2ClientConfig()
   const taskManager = new InMemoryTaskManager(
-    new InMemoryBtAdapter(),
+    new QbittorrentBtAdapter(qBittorrentConfig),
     logger,
     taskStore,
     networkChecker

@@ -5,10 +5,6 @@ import type {
   TaskIdInput
 } from '../../types'
 
-const SIMULATED_TOTAL_BYTES = 512 * 1024 * 1024
-const SIMULATED_SPEED_BYTES = 2 * 1024 * 1024
-const SIMULATED_METADATA_MS = 1500
-
 export type BtSessionState = 'attached' | 'metadata' | 'downloading' | 'paused' | 'completed'
 
 export interface BtAdapterSession {
@@ -51,6 +47,37 @@ export interface BtAdapter {
   deleteTask(input: TaskIdInput): Promise<void>
 }
 
+export interface QbittorrentClientConfig {
+  baseUrl: string
+  username: string
+  password: string
+}
+
+interface QbittorrentTorrentInfo {
+  hash: string
+  progress: number
+  dlspeed: number
+  downloaded: number
+  eta: number
+  state: string
+  size?: number
+  total_size?: number
+}
+
+interface RuntimeSession {
+  taskId: string
+  infoHash: string
+  source: string
+  savePath: string
+  state: BtSessionState
+  totalBytes: number
+  downloadedBytes: number
+  speedBytes: number
+  lastError?: string
+  createdAt: string
+  updatedAt: string
+}
+
 function assertMagnetSource(source: string): void {
   if (!source.trim().startsWith('magnet:?')) {
     throw new Error('BT adapter only supports magnet links')
@@ -69,12 +96,58 @@ function clampProgress(downloadedBytes: number, totalBytes: number): number {
   return Math.min(1, downloadedBytes / totalBytes)
 }
 
-function buildSnapshot(session: BtAdapterSession): BtTaskSnapshot {
+function base32ToHex(value: string): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  let bits = ''
+
+  for (const char of value.toUpperCase()) {
+    const index = alphabet.indexOf(char)
+
+    if (index === -1) {
+      throw new Error('Unsupported base32 magnet hash')
+    }
+
+    bits += index.toString(2).padStart(5, '0')
+  }
+
+  let hex = ''
+
+  for (let offset = 0; offset + 4 <= bits.length; offset += 4) {
+    hex += Number.parseInt(bits.slice(offset, offset + 4), 2).toString(16)
+  }
+
+  return hex
+}
+
+function parseMagnetInfoHash(source: string): string {
+  const magnet = new URL(source.trim())
+  const xt = magnet.searchParams.get('xt')
+
+  if (!xt?.startsWith('urn:btih:')) {
+    throw new Error('Magnet link is missing btih info hash')
+  }
+
+  const rawHash = xt.slice('urn:btih:'.length)
+
+  if (rawHash.length === 40) {
+    return rawHash.toLowerCase()
+  }
+
+  if (rawHash.length === 32) {
+    return base32ToHex(rawHash)
+  }
+
+  throw new Error('Unsupported magnet info hash format')
+}
+
+function buildSnapshot(session: RuntimeSession): BtTaskSnapshot {
   const progress = clampProgress(session.downloadedBytes, session.totalBytes)
   const remainingBytes = Math.max(session.totalBytes - session.downloadedBytes, 0)
   const etaSeconds =
     session.state === 'downloading' && session.speedBytes > 0
-      ? Math.ceil(remainingBytes / session.speedBytes)
+      ? session.totalBytes > 0
+        ? remainingBytes / session.speedBytes
+        : undefined
       : undefined
 
   return {
@@ -84,9 +157,72 @@ function buildSnapshot(session: BtAdapterSession): BtTaskSnapshot {
     downloadedBytes: session.downloadedBytes,
     speedBytes: session.speedBytes,
     progress,
-    etaSeconds,
+    etaSeconds: typeof etaSeconds === 'number' ? Math.ceil(etaSeconds) : undefined,
     updatedAt: session.updatedAt
   }
+}
+
+function updateSession(session: RuntimeSession, patch: Partial<RuntimeSession>): RuntimeSession {
+  return {
+    ...session,
+    ...patch,
+    updatedAt: toIsoNow()
+  }
+}
+
+function mapQbittorrentState(
+  state: string,
+  progress: number
+): { state: BtSessionState; errorMessage?: string } {
+  if (
+    progress >= 1 ||
+    ['uploading', 'stalledUP', 'queuedUP', 'forcedUP', 'pausedUP'].includes(state)
+  ) {
+    return { state: 'completed' }
+  }
+
+  if (state === 'missingFiles') {
+    return {
+      state: 'paused',
+      errorMessage: 'qBittorrent 检测到下载文件缺失或路径不可用'
+    }
+  }
+
+  if (state === 'error' || state === 'unknown') {
+    return {
+      state: 'paused',
+      errorMessage: 'qBittorrent 返回异常状态，请检查下载器任务详情'
+    }
+  }
+
+  if (['metaDL', 'forcedMetaDL', 'checkingResumeData'].includes(state)) {
+    return { state: 'metadata' }
+  }
+
+  if (['pausedDL'].includes(state)) {
+    return { state: 'paused' }
+  }
+
+  if (
+    [
+      'downloading',
+      'forcedDL',
+      'stalledDL',
+      'queuedDL',
+      'checkingDL',
+      'allocating',
+      'moving'
+    ].includes(state)
+  ) {
+    return { state: 'downloading' }
+  }
+
+  return { state: 'attached' }
+}
+
+function getRefererOrigin(baseUrl: string): string {
+  const url = new URL(baseUrl)
+  return `${url.protocol}//${url.host}`
 }
 
 export function btSessionStateToTaskStatus(state: BtSessionState): DownloadTaskStatus {
@@ -105,46 +241,166 @@ export function btSessionStateToTaskStatus(state: BtSessionState): DownloadTaskS
   }
 }
 
-export class InMemoryBtAdapter implements BtAdapter {
-  private readonly sessions = new Map<string, BtAdapterSession>()
+class QbittorrentWebUiClient {
+  private sid: string | null = null
+
+  constructor(private readonly config: QbittorrentClientConfig) {}
+
+  async getVersion(): Promise<string> {
+    return this.request<string>('/app/version')
+  }
+
+  async addMagnet(source: string, savePath: string, paused: boolean): Promise<void> {
+    const body = new FormData()
+    body.set('urls', source)
+    body.set('savepath', savePath)
+    body.set('paused', paused ? 'true' : 'false')
+    await this.request('/torrents/add', {
+      method: 'POST',
+      body
+    })
+  }
+
+  async getTorrent(infoHash: string): Promise<QbittorrentTorrentInfo | null> {
+    const encodedHash = encodeURIComponent(infoHash)
+    const result = await this.request(`/torrents/info?hashes=${encodedHash}`, {}, true)
+    return Array.isArray(result) && result.length > 0 ? (result[0] as QbittorrentTorrentInfo) : null
+  }
+
+  async pause(infoHash: string): Promise<void> {
+    await this.postHashes('/torrents/pause', infoHash)
+  }
+
+  async resume(infoHash: string): Promise<void> {
+    await this.postHashes('/torrents/resume', infoHash)
+  }
+
+  async delete(infoHash: string): Promise<void> {
+    const body = new URLSearchParams()
+    body.set('hashes', infoHash)
+    body.set('deleteFiles', 'false')
+    await this.request('/torrents/delete', {
+      method: 'POST',
+      body
+    })
+  }
+
+  private async postHashes(path: string, infoHash: string): Promise<void> {
+    const body = new URLSearchParams()
+    body.set('hashes', infoHash)
+    await this.request(path, {
+      method: 'POST',
+      body
+    })
+  }
+
+  private async login(): Promise<void> {
+    if (this.sid) {
+      return
+    }
+
+    const body = new URLSearchParams()
+    body.set('username', this.config.username)
+    body.set('password', this.config.password)
+
+    const response = await fetch(new URL('/api/v2/auth/login', this.config.baseUrl), {
+      method: 'POST',
+      headers: {
+        Origin: getRefererOrigin(this.config.baseUrl),
+        Referer: getRefererOrigin(this.config.baseUrl)
+      },
+      body
+    })
+
+    if (!response.ok) {
+      throw new Error(`qBittorrent 登录失败 (${response.status})`)
+    }
+
+    const cookie = response.headers.get('set-cookie')
+    const sid = cookie?.match(/SID=([^;]+)/)?.[1]
+
+    if (!sid) {
+      throw new Error('qBittorrent 登录成功但未返回 SID Cookie')
+    }
+
+    this.sid = sid
+  }
+
+  private async request<T = unknown>(
+    path: string,
+    init: RequestInit = {},
+    parseJson = false
+  ): Promise<T> {
+    await this.login()
+
+    const response = await fetch(new URL(`/api/v2${path}`, this.config.baseUrl), {
+      ...init,
+      headers: {
+        Cookie: `SID=${this.sid}`,
+        Origin: getRefererOrigin(this.config.baseUrl),
+        Referer: getRefererOrigin(this.config.baseUrl),
+        ...(init.headers ?? {})
+      }
+    })
+
+    if (response.status === 403) {
+      this.sid = null
+      await this.login()
+      return this.request<T>(path, init, parseJson)
+    }
+
+    if (!response.ok) {
+      throw new Error(`qBittorrent WebUI 请求失败 (${response.status})`)
+    }
+
+    return parseJson ? ((await response.json()) as T) : ((await response.text()) as T)
+  }
+}
+
+export class QbittorrentBtAdapter implements BtAdapter {
+  private readonly sessions = new Map<string, RuntimeSession>()
+  private readonly client: QbittorrentWebUiClient | null
+
+  constructor(config: QbittorrentClientConfig | null) {
+    this.client = config ? new QbittorrentWebUiClient(config) : null
+  }
 
   async attachTask(input: AttachBtTaskInput): Promise<BtAdapterSession> {
     assertMagnetSource(input.source)
-
+    const client = this.getClientOrThrow()
+    const infoHash = parseMagnetInfoHash(input.source)
     const now = toIsoNow()
-    const session: BtAdapterSession = {
-      id: crypto.randomUUID(),
+    const session: RuntimeSession = {
       taskId: input.taskId,
+      infoHash,
       source: input.source.trim(),
       savePath: input.savePath.trim(),
       state: 'attached',
-      totalBytes: SIMULATED_TOTAL_BYTES,
+      totalBytes: 0,
       downloadedBytes: 0,
       speedBytes: 0,
       createdAt: now,
       updatedAt: now
     }
 
+    await client.addMagnet(session.source, session.savePath, true)
     this.sessions.set(input.taskId, session)
 
-    return session
+    return this.toAdapterSession(session)
   }
 
   async hydrateTask(task: DownloadTask): Promise<BtAdapterSession> {
     assertMagnetSource(task.source)
 
     const now = toIsoNow()
-    const totalBytes = task.totalBytes ?? SIMULATED_TOTAL_BYTES
-    const downloadedBytes = Math.min(task.downloadedBytes, totalBytes)
-    const state = task.status === 'completed' ? 'completed' : 'paused'
-    const session: BtAdapterSession = {
-      id: crypto.randomUUID(),
+    const session: RuntimeSession = {
       taskId: task.id,
+      infoHash: parseMagnetInfoHash(task.source),
       source: task.source.trim(),
       savePath: task.savePath.trim(),
-      state,
-      totalBytes,
-      downloadedBytes,
+      state: task.status === 'completed' ? 'completed' : 'paused',
+      totalBytes: task.totalBytes ?? 0,
+      downloadedBytes: task.downloadedBytes,
       speedBytes: 0,
       createdAt: task.createdAt,
       updatedAt: now
@@ -152,109 +408,119 @@ export class InMemoryBtAdapter implements BtAdapter {
 
     this.sessions.set(task.id, session)
 
-    return session
+    return this.toAdapterSession(session)
   }
 
   async startTask(input: TaskIdInput): Promise<BtTaskSnapshot> {
     const session = this.getSessionOrThrow(input.taskId)
-    const now = toIsoNow()
-    const nextSession: BtAdapterSession = {
-      ...session,
-      state: 'metadata',
-      speedBytes: 0,
-      metadataStartedAt: now,
-      lastActiveAt: now,
-      updatedAt: now
-    }
+    await this.getClientOrThrow().resume(session.infoHash)
 
+    const nextSession = updateSession(session, {
+      state: 'metadata',
+      lastError: undefined
+    })
     this.sessions.set(input.taskId, nextSession)
 
-    return buildSnapshot(nextSession)
+    return this.getTaskSnapshot(input)
   }
 
   async getTaskSnapshot(input: TaskIdInput): Promise<BtTaskSnapshot> {
-    const session = this.advanceSession(this.getSessionOrThrow(input.taskId))
-    this.sessions.set(input.taskId, session)
+    const client = this.getClientOrThrow()
+    const session = this.getSessionOrThrow(input.taskId)
+    const torrent = await client.getTorrent(session.infoHash)
 
-    return buildSnapshot(session)
-  }
+    if (!torrent) {
+      if (session.state === 'completed') {
+        return buildSnapshot(session)
+      }
 
-  async pauseTask(input: TaskIdInput): Promise<BtTaskSnapshot> {
-    const session = this.advanceSession(this.getSessionOrThrow(input.taskId))
-    const nextSession: BtAdapterSession = {
-      ...session,
-      state: session.state === 'completed' ? 'completed' : 'paused',
-      speedBytes: 0,
-      updatedAt: toIsoNow()
+      throw new Error('qBittorrent 中未找到对应 torrent 任务')
     }
+
+    const stateResult = mapQbittorrentState(torrent.state, torrent.progress)
+    const totalBytes = torrent.total_size ?? torrent.size ?? session.totalBytes
+    const nextSession = updateSession(session, {
+      state: stateResult.state,
+      totalBytes,
+      downloadedBytes: Math.max(torrent.downloaded, 0),
+      speedBytes: Math.max(torrent.dlspeed, 0),
+      lastError: stateResult.errorMessage
+    })
 
     this.sessions.set(input.taskId, nextSession)
 
-    return buildSnapshot(nextSession)
+    if (nextSession.lastError) {
+      throw new Error(nextSession.lastError)
+    }
+
+    const snapshot = buildSnapshot(nextSession)
+    return {
+      ...snapshot,
+      progress: torrent.progress,
+      etaSeconds: torrent.eta >= 0 ? torrent.eta : snapshot.etaSeconds
+    }
+  }
+
+  async pauseTask(input: TaskIdInput): Promise<BtTaskSnapshot> {
+    const session = this.getSessionOrThrow(input.taskId)
+    await this.getClientOrThrow().pause(session.infoHash)
+    const nextSession = updateSession(session, {
+      state: 'paused',
+      speedBytes: 0
+    })
+    this.sessions.set(input.taskId, nextSession)
+
+    return this.getTaskSnapshot(input)
   }
 
   async resumeTask(input: TaskIdInput): Promise<BtTaskSnapshot> {
     const session = this.getSessionOrThrow(input.taskId)
-    const now = toIsoNow()
-    const nextState = session.downloadedBytes >= session.totalBytes ? 'completed' : 'downloading'
-    const nextSession: BtAdapterSession = {
-      ...session,
-      state: nextState,
-      speedBytes: nextState === 'completed' ? 0 : SIMULATED_SPEED_BYTES,
-      lastActiveAt: now,
-      updatedAt: now
-    }
-
+    await this.getClientOrThrow().resume(session.infoHash)
+    const nextSession = updateSession(session, {
+      state: 'metadata',
+      lastError: undefined
+    })
     this.sessions.set(input.taskId, nextSession)
 
-    return buildSnapshot(nextSession)
+    return this.getTaskSnapshot(input)
   }
 
   async deleteTask(input: TaskIdInput): Promise<void> {
-    this.getSessionOrThrow(input.taskId)
+    const session = this.getSessionOrThrow(input.taskId)
+    await this.getClientOrThrow().delete(session.infoHash)
     this.sessions.delete(input.taskId)
   }
 
-  private advanceSession(session: BtAdapterSession): BtAdapterSession {
-    const now = Date.now()
+  async getClientVersion(): Promise<string> {
+    return this.getClientOrThrow().getVersion()
+  }
 
-    if (session.state === 'metadata' && session.metadataStartedAt) {
-      const metadataElapsedMs = now - new Date(session.metadataStartedAt).getTime()
-
-      if (metadataElapsedMs >= SIMULATED_METADATA_MS) {
-        const updatedAt = toIsoNow()
-
-        return {
-          ...session,
-          state: 'downloading',
-          speedBytes: SIMULATED_SPEED_BYTES,
-          lastActiveAt: updatedAt,
-          updatedAt
-        }
-      }
-    }
-
-    if (session.state !== 'downloading' || !session.lastActiveAt) {
-      return session
-    }
-
-    const elapsedMs = Math.max(now - new Date(session.lastActiveAt).getTime(), 0)
-    const downloadedDelta = Math.floor((SIMULATED_SPEED_BYTES * elapsedMs) / 1000)
-    const downloadedBytes = Math.min(session.downloadedBytes + downloadedDelta, session.totalBytes)
-    const completed = downloadedBytes >= session.totalBytes
-    const updatedAt = toIsoNow()
-
+  private toAdapterSession(session: RuntimeSession): BtAdapterSession {
     return {
-      ...session,
-      state: completed ? 'completed' : 'downloading',
-      downloadedBytes,
-      speedBytes: completed ? 0 : SIMULATED_SPEED_BYTES,
-      lastActiveAt: updatedAt,
-      updatedAt
+      id: crypto.randomUUID(),
+      taskId: session.taskId,
+      source: session.source,
+      savePath: session.savePath,
+      state: session.state,
+      totalBytes: session.totalBytes,
+      downloadedBytes: session.downloadedBytes,
+      speedBytes: session.speedBytes,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt
     }
   }
 
-  private getSessionOrThrow(taskId: string): BtAdapterSession {
+  private getClientOrThrow(): QbittorrentWebUiClient {
+    if (!this.client) {
+      throw new Error(
+        '未配置 qBittorrent WebUI。请设置 QBITTORRENT_BASE_URL、QBITTORRENT_USERNAME、QBITTORRENT_PASSWORD。'
+      )
+    }
+
+    return this.client
+  }
+
+  private getSessionOrThrow(taskId: string): RuntimeSession {
     const session = this.sessions.get(taskId)
 
     if (!session) {

@@ -71,7 +71,7 @@ export function createPendingMagnetTask(input: CreateDownloadTaskInput): Downloa
     name: buildTaskName(input),
     type: 'magnet',
     source: input.source.trim(),
-    engine: 'bt',
+    engine: 'qbittorrent',
     status: 'pending',
     savePath: input.savePath.trim(),
     progress: 0,

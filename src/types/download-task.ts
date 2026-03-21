@@ -2,7 +2,7 @@ export const DOWNLOAD_TASK_TYPES = ['magnet'] as const
 
 export type DownloadTaskType = (typeof DOWNLOAD_TASK_TYPES)[number]
 
-export const DOWNLOAD_ENGINES = ['bt'] as const
+export const DOWNLOAD_ENGINES = ['qbittorrent', 'aria2'] as const
 
 export type DownloadEngine = (typeof DOWNLOAD_ENGINES)[number]
 
