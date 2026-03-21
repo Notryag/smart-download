@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { InMemoryBtAdapter } from '../adapters'
-import { InMemoryLogger, InMemoryTaskManager } from '../core'
+import { DnsNetworkChecker, InMemoryLogger, InMemoryTaskManager } from '../core'
 import { SqliteDownloadTaskStore } from '../storage'
 import { registerDownloadTaskIpc } from './ipc/download-task'
 
@@ -52,7 +52,8 @@ app.whenReady().then(() => {
   const taskManager = new InMemoryTaskManager(
     new InMemoryBtAdapter(),
     new InMemoryLogger(),
-    taskStore
+    taskStore,
+    new DnsNetworkChecker()
   )
 
   return taskManager.restoreTasks().then(() => {

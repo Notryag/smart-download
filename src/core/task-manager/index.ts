@@ -1,5 +1,6 @@
 import { btSessionStateToTaskStatus, type BtAdapter, type BtTaskSnapshot } from '../../adapters'
 import type { InMemoryLogger } from '../logger'
+import type { NetworkChecker } from '../network'
 import type { DownloadTaskStore } from '../../storage'
 import {
   isFinishedDownloadTaskStatus,
@@ -120,7 +121,8 @@ export class InMemoryTaskManager {
   constructor(
     private readonly btAdapter: BtAdapter,
     private readonly logger: InMemoryLogger,
-    private readonly taskStore: DownloadTaskStore
+    private readonly taskStore: DownloadTaskStore,
+    private readonly networkChecker: NetworkChecker
   ) {}
 
   async restoreTasks(): Promise<void> {
@@ -149,6 +151,8 @@ export class InMemoryTaskManager {
     await this.taskStore.upsertTask(task)
 
     try {
+      await this.networkChecker.assertBtNetworkReady()
+
       await this.btAdapter.attachTask({
         taskId: task.id,
         source: task.source,
@@ -253,6 +257,8 @@ export class InMemoryTaskManager {
   async resumeTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
     try {
+      await this.networkChecker.assertBtNetworkReady()
+
       const snapshot = await this.btAdapter.resumeTask(input)
       const resumedTask = applySnapshot(task, snapshot)
 

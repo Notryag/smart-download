@@ -25,7 +25,7 @@
 ## Stage 2: Stability
 - [x] SQLite 持久化
 - [x] 启动时恢复任务状态
-- [ ] 基础网络检查
+- [x] 基础网络检查
 - [ ] 基础诊断摘要
 
 ## Backlog
