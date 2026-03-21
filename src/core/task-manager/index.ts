@@ -1,4 +1,4 @@
-import { btSessionStateToTaskStatus, type BtAdapter } from '../../adapters'
+import { btSessionStateToTaskStatus, type BtAdapter, type BtTaskSnapshot } from '../../adapters'
 import type {
   CreateDownloadTaskInput,
   DeleteTaskInput,
@@ -28,6 +28,17 @@ function updateTask(task: DownloadTask, patch: Partial<DownloadTask>): DownloadT
     ...patch,
     updatedAt: new Date().toISOString()
   }
+}
+
+function applySnapshot(task: DownloadTask, snapshot: BtTaskSnapshot): DownloadTask {
+  return updateTask(task, {
+    status: btSessionStateToTaskStatus(snapshot.state),
+    progress: snapshot.progress,
+    downloadedBytes: snapshot.downloadedBytes,
+    totalBytes: snapshot.totalBytes,
+    speedBytes: snapshot.speedBytes,
+    etaSeconds: snapshot.etaSeconds
+  })
 }
 
 export function createPendingMagnetTask(input: CreateDownloadTaskInput): DownloadTask {
@@ -67,17 +78,28 @@ export class InMemoryTaskManager {
       name: task.name
     })
 
-    const startedSession = await this.btAdapter.startTask({ taskId: task.id })
-    const startedTask = updateTask(task, {
-      status: btSessionStateToTaskStatus(startedSession.state)
-    })
+    const startedSnapshot = await this.btAdapter.startTask({ taskId: task.id })
+    const startedTask = applySnapshot(task, startedSnapshot)
 
     this.tasks.set(task.id, startedTask)
 
     return startedTask
   }
 
-  listTasks(): DownloadTask[] {
+  async listTasks(): Promise<DownloadTask[]> {
+    const taskEntries = await Promise.all(
+      Array.from(this.tasks.values()).map(async (task) => {
+        const snapshot = await this.btAdapter.getTaskSnapshot({ taskId: task.id })
+        const syncedTask = applySnapshot(task, snapshot)
+
+        return [task.id, syncedTask] as const
+      })
+    )
+
+    for (const [taskId, task] of taskEntries) {
+      this.tasks.set(taskId, task)
+    }
+
     return Array.from(this.tasks.values()).sort((left, right) =>
       right.createdAt.localeCompare(left.createdAt)
     )
@@ -85,20 +107,16 @@ export class InMemoryTaskManager {
 
   async pauseTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
-    const session = await this.btAdapter.pauseTask(input)
-    const nextStatus =
-      task.status === 'completed' ? task.status : btSessionStateToTaskStatus(session.state)
+    const snapshot = await this.btAdapter.pauseTask(input)
 
-    this.tasks.set(task.id, updateTask(task, { status: nextStatus }))
+    this.tasks.set(task.id, applySnapshot(task, snapshot))
   }
 
   async resumeTask(input: TaskIdInput): Promise<void> {
     const task = this.getTaskOrThrow(input.taskId)
-    const session = await this.btAdapter.resumeTask(input)
-    const nextStatus =
-      task.status === 'completed' ? task.status : btSessionStateToTaskStatus(session.state)
+    const snapshot = await this.btAdapter.resumeTask(input)
 
-    this.tasks.set(task.id, updateTask(task, { status: nextStatus }))
+    this.tasks.set(task.id, applySnapshot(task, snapshot))
   }
 
   async deleteTask(input: DeleteTaskInput): Promise<void> {
