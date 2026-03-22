@@ -14,6 +14,7 @@ import type {
 } from './types'
 import { Aria2RuntimeSessionStore } from './runtime-session-store'
 import { filterRelatedTasksBySource } from './source-match'
+import { attachUriWithDuplicateCleanup } from './attach-with-cleanup'
 import { Aria2StateWaiter } from './state-waiter'
 import {
   ARIA2_DIAGNOSTIC_LOG_INTERVAL_MS,
@@ -38,27 +39,21 @@ const ARIA2_SCAN_LIMIT = 1000
 
 export class Aria2RpcClient {
   constructor(private readonly config: Aria2ClientConfig) {}
-
   async getVersion(): Promise<{ version: string; enabledFeatures: string[] }> {
     return this.request('aria2.getVersion', [])
   }
-
   async addUri(uris: string[], options: Record<string, string> = {}): Promise<string> {
     return this.request('aria2.addUri', [uris, options])
   }
-
   async tellStatus(gid: string): Promise<Aria2TellStatusResult> {
     return this.request('aria2.tellStatus', [gid])
   }
-
   async getUris(gid: string): Promise<Aria2UriResult[]> {
     return this.request('aria2.getUris', [gid])
   }
-
   async tellActive(keys: readonly string[] = ARIA2_STATUS_QUERY_KEYS): Promise<Aria2TellStatusResult[]> {
     return this.request('aria2.tellActive', [keys])
   }
-
   async tellWaiting(
     offset: number,
     num: number,
@@ -90,7 +85,6 @@ export class Aria2RpcClient {
   async removeDownloadResult(gid: string): Promise<string> {
     return this.request('aria2.removeDownloadResult', [gid])
   }
-
   private async request<T>(method: string, params: unknown[]): Promise<T> {
     const payload = {
       jsonrpc: '2.0',
@@ -144,7 +138,6 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       logger
     )
   }
-
   async getRuntimeStatus(): Promise<DownloadAdapterRuntimeStatus> {
     if (!this.client) {
       return {
@@ -186,7 +179,6 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       throw new Error(status.message)
     }
   }
-
   async attachTask(input: {
     taskId: string
     source: string
@@ -196,42 +188,30 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     assertSource(input.source)
     const client = this.getClientOrThrow()
     const now = toIsoNow()
+    const source = input.source.trim()
+    const savePath = input.savePath.trim()
+    const options = buildAddUriOptions(source, savePath)
     this.logger?.info('Submitting task to aria2 RPC', {
       category: 'aria2-adapter',
       details: {
-        savePath: input.savePath.trim(),
+        savePath,
         sourcePreview: buildSourcePreview(input.source)
       },
       taskId: input.taskId
     })
-    let gid: string
-
-    try {
-      const options = buildAddUriOptions(input.source, input.savePath)
-      gid = await client.addUri([input.source.trim()], options)
-    } catch (error) {
-      const message = getErrorMessage(error, 'aria2 创建任务失败')
-
-      if (!message.includes('already registered')) {
-        throw error
-      }
-
-      this.logger?.warning('aria2 reported duplicate registered magnet; cleaning stale entries', {
-        category: 'aria2-adapter',
-        details: {
-          sourcePreview: buildSourcePreview(input.source)
-        },
-        taskId: input.taskId
-      })
-      await this.cleanupRelatedTasksBySource(input.source)
-      gid = await client.addUri([input.source.trim()], buildAddUriOptions(input.source, input.savePath))
-    }
-
+    const gid = await attachUriWithDuplicateCleanup({
+      client,
+      source,
+      options,
+      taskId: input.taskId,
+      logger: this.logger,
+      cleanup: async () => this.cleanupRelatedTasksBySource(source)
+    })
     const session = this.sessionStore.createSession({
       taskId: input.taskId,
       gid,
-      source: input.source.trim(),
-      savePath: input.savePath.trim(),
+      source,
+      savePath,
       createdAt: now,
       updatedAt: now
     })

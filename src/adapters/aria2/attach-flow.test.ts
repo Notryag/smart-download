@@ -281,3 +281,125 @@ it('removes duplicate magnet tasks even when aria2 list output misses infoHash',
     'aria2.tellStatus'
   ])
 })
+
+it('retries duplicate cleanup more than once before failing task creation', async () => {
+  const fetchMock = mockFetchSequence(
+    {
+      body: {
+        error: {
+          code: 1,
+          message: 'The download is already registered.'
+        }
+      }
+    },
+    {
+      body: {
+        result: [
+          {
+            gid: 'gid-old-active',
+            status: 'active',
+            infoHash: '1234567890123456789012345678901234567890'
+          }
+        ]
+      }
+    },
+    {
+      body: {
+        result: []
+      }
+    },
+    {
+      body: {
+        result: []
+      }
+    },
+    {
+      body: {
+        result: 'OK'
+      }
+    },
+    {
+      body: {
+        result: 'OK'
+      }
+    },
+    {
+      body: {
+        error: {
+          code: 1,
+          message: 'The download is already registered.'
+        }
+      }
+    },
+    {
+      body: {
+        result: []
+      }
+    },
+    {
+      body: {
+        result: []
+      }
+    },
+    {
+      body: {
+        result: [
+          {
+            gid: 'gid-old-stopped',
+            status: 'error',
+            infoHash: '1234567890123456789012345678901234567890'
+          }
+        ]
+      }
+    },
+    {
+      body: {
+        result: 'OK'
+      }
+    },
+    {
+      body: {
+        result: 'gid-new'
+      }
+    },
+    {
+      body: {
+        result: {
+          gid: 'gid-new',
+          status: 'active',
+          totalLength: '100',
+          completedLength: '10',
+          downloadSpeed: '5'
+        }
+      }
+    }
+  )
+
+  const adapter = new Aria2DownloadAdapter({
+    rpcUrl: 'http://127.0.0.1:6800/jsonrpc',
+    secret: 'rpc-secret'
+  })
+
+  const session = await adapter.attachTask({
+    taskId: 'task-1',
+    source: 'magnet:?xt=urn:btih:1234567890123456789012345678901234567890',
+    savePath: 'D:\\Downloads'
+  })
+
+  expect(session.remoteId).toBe('gid-new')
+  expect(listRequestMethods(fetchMock)).toEqual([
+    'aria2.addUri',
+    'aria2.tellActive',
+    'aria2.tellWaiting',
+    'aria2.tellStopped',
+    'aria2.forceRemove',
+    'aria2.removeDownloadResult',
+    'aria2.addUri',
+    'aria2.tellActive',
+    'aria2.tellWaiting',
+    'aria2.tellStopped',
+    'aria2.removeDownloadResult',
+    'aria2.addUri',
+    'aria2.tellStatus'
+  ])
+})

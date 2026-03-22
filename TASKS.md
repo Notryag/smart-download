@@ -58,6 +58,7 @@
 - [x] 处理 magnet 下载目标文件重名冲突，避免 aria2 因已存在文件直接失败
 - [x] 启动前清理 aria2 session.txt 中重复 magnet 条目，避免重复注册旧任务
 - [x] 修复 aria2 列表缺少 infoHash 时重复 magnet 残留任务无法自动清理的问题
+- [x] 为 aria2 重复 magnet 清理补充多轮重试，覆盖残留异步释放场景
 - [x] 更新 AI 接手文档，明确核心链路优先按 TDD 执行
 - [x] 配置提交前自动执行 verify（lint + typecheck + test）
 
