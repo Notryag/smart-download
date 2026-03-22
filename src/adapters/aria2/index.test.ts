@@ -280,4 +280,75 @@ describe('Aria2DownloadAdapter delete flow', () => {
       'Download session not found for task: task-1'
     )
   })
+
+  it('continues cleanup when the tracked gid is already missing in aria2', async () => {
+    const fetchMock = mockFetchSequence(
+      {
+        body: {
+          error: {
+            code: 1,
+            message: 'GID gid-1 is not found'
+          }
+        },
+        status: 400
+      },
+      {
+        body: {
+          error: {
+            code: 1,
+            message: 'GID gid-1 is not found'
+          }
+        },
+        status: 400
+      },
+      {
+        body: {
+          result: []
+        }
+      },
+      {
+        body: {
+          result: []
+        }
+      },
+      {
+        body: {
+          result: [
+            {
+              gid: 'gid-old-stopped',
+              status: 'error',
+              infoHash: '1234567890123456789012345678901234567890'
+            }
+          ]
+        }
+      },
+      {
+        body: {
+          result: 'OK'
+        }
+      }
+    )
+
+    const adapter = new Aria2DownloadAdapter({
+      rpcUrl: 'http://127.0.0.1:6800/jsonrpc',
+      secret: 'rpc-secret'
+    })
+    await adapter.hydrateTask(createPersistedTask())
+
+    await expect(adapter.deleteTask({ taskId: 'task-1' })).resolves.toBeUndefined()
+
+    const requestMethods = fetchMock.mock.calls.map((call) => {
+      const request = JSON.parse(String(call?.[1]?.body)) as { method: string }
+      return request.method
+    })
+
+    expect(requestMethods).toEqual([
+      'aria2.forceRemove',
+      'aria2.removeDownloadResult',
+      'aria2.tellActive',
+      'aria2.tellWaiting',
+      'aria2.tellStopped',
+      'aria2.removeDownloadResult'
+    ])
+  })
 })

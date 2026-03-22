@@ -23,6 +23,7 @@ import {
   buildAddUriOptions,
   buildSourcePreview,
   getErrorMessage,
+  isMissingGidErrorMessage,
   isSettledTaskStatus,
   toIsoNow,
   toRuntimeStatusMessage
@@ -100,15 +101,14 @@ export class Aria2RpcClient {
       },
       body: JSON.stringify(payload)
     })
-
-    if (!response.ok) {
-      throw new Error(`aria2 RPC 请求失败 (${response.status})`)
-    }
-
     const json = (await response.json()) as Aria2RpcResponse<T>
 
     if (json.error) {
       throw new Error(`aria2 RPC 错误 (${json.error.code}): ${json.error.message}`)
+    }
+
+    if (!response.ok) {
+      throw new Error(`aria2 RPC 请求失败 (${response.status})`)
     }
 
     if (json.result === undefined) {
@@ -332,7 +332,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     } catch (error) {
       const message = getErrorMessage(error, 'aria2 删除任务失败')
 
-      if (!message.includes('Download already completed')) {
+      if (!message.includes('Download already completed') && !isMissingGidErrorMessage(message)) {
         throw error
       }
     }
@@ -342,7 +342,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     } catch (error) {
       const message = getErrorMessage(error, 'aria2 清理任务结果失败')
 
-      if (!message.includes('Invalid GID')) {
+      if (!isMissingGidErrorMessage(message)) {
         throw error
       }
     }
@@ -415,7 +415,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
         } catch (error) {
           const message = getErrorMessage(error, 'aria2 读取任务 URI 失败')
 
-          if (message.includes('Invalid GID')) {
+          if (isMissingGidErrorMessage(message)) {
             return []
           }
 
@@ -431,7 +431,10 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
         } catch (error) {
           const message = getErrorMessage(error, 'aria2 删除关联任务失败')
 
-          if (!message.includes('Download already completed') && !message.includes('Invalid GID')) {
+          if (
+            !message.includes('Download already completed') &&
+            !isMissingGidErrorMessage(message)
+          ) {
             throw error
           }
         }
@@ -442,7 +445,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       } catch (error) {
         const message = getErrorMessage(error, 'aria2 清理关联任务结果失败')
 
-        if (!message.includes('Invalid GID')) {
+        if (!isMissingGidErrorMessage(message)) {
           throw error
         }
       }

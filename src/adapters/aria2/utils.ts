@@ -16,6 +16,10 @@ export function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
 }
 
+export function isMissingGidErrorMessage(message: string): boolean {
+  return message.includes('Invalid GID') || /GID .+ is not found/.test(message)
+}
+
 export function assertSource(source: string): void {
   if (source.trim().length === 0) {
     throw new Error('下载地址不能为空。')
