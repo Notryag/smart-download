@@ -6,8 +6,14 @@ import type {
 } from '../download'
 import type { DownloadTask, TaskIdInput } from '../../types'
 import type { LogContext } from '../../core'
-import type { Aria2ClientConfig, Aria2RpcResponse, Aria2TellStatusResult } from './types'
+import type {
+  Aria2ClientConfig,
+  Aria2RpcResponse,
+  Aria2TellStatusResult,
+  Aria2UriResult
+} from './types'
 import { Aria2RuntimeSessionStore } from './runtime-session-store'
+import { filterRelatedTasksBySource } from './source-match'
 import { Aria2StateWaiter } from './state-waiter'
 import {
   ARIA2_DIAGNOSTIC_LOG_INTERVAL_MS,
@@ -43,6 +49,10 @@ export class Aria2RpcClient {
 
   async tellStatus(gid: string): Promise<Aria2TellStatusResult> {
     return this.request('aria2.tellStatus', [gid])
+  }
+
+  async getUris(gid: string): Promise<Aria2UriResult[]> {
+    return this.request('aria2.getUris', [gid])
   }
 
   async tellActive(keys: readonly string[] = ARIA2_STATUS_QUERY_KEYS): Promise<Aria2TellStatusResult[]> {
@@ -409,24 +419,29 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     ignoredGids: Set<string> = new Set()
   ): Promise<void> {
     const client = this.getClientOrThrow()
-    const infoHash = extractMagnetInfoHash(source)
-
-    if (!infoHash) {
-      return
-    }
-
     const [active, waiting, stopped] = await Promise.all([
       client.tellActive(),
       client.tellWaiting(0, ARIA2_SCAN_LIMIT),
       client.tellStopped(0, ARIA2_SCAN_LIMIT)
     ])
 
-    const relatedTasks = [...active, ...waiting, ...stopped].filter((task) => {
-      if (ignoredGids.has(task.gid)) {
-        return false
-      }
+    const relatedTasks = await filterRelatedTasksBySource({
+      source,
+      tasks: [...active, ...waiting, ...stopped],
+      ignoredGids,
+      readUris: async (gid) => {
+        try {
+          return await client.getUris(gid)
+        } catch (error) {
+          const message = getErrorMessage(error, 'aria2 读取任务 URI 失败')
 
-      return normalizeInfoHash(task.infoHash) === infoHash
+          if (message.includes('Invalid GID')) {
+            return []
+          }
+
+          throw error
+        }
+      }
     })
 
     for (const task of relatedTasks) {
@@ -503,16 +518,6 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
 
     this.lastZeroSpeedLogAt.delete(snapshot.taskId)
   }
-}
-
-function extractMagnetInfoHash(source: string): string | null {
-  const match = source.match(/xt=urn:btih:([^&]+)/i)
-  return normalizeInfoHash(match?.[1])
-}
-
-function normalizeInfoHash(value: string | undefined): string | null {
-  const normalized = value?.trim().toLowerCase()
-  return normalized ? normalized : null
 }
 
 export type { Aria2ClientConfig, Aria2TellStatusResult } from './types'

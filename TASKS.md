@@ -57,6 +57,7 @@
 - [x] 修复 aria2 magnet 元数据任务切换真实下载 GID 后的大小同步错误
 - [x] 处理 magnet 下载目标文件重名冲突，避免 aria2 因已存在文件直接失败
 - [x] 启动前清理 aria2 session.txt 中重复 magnet 条目，避免重复注册旧任务
+- [x] 修复 aria2 列表缺少 infoHash 时重复 magnet 残留任务无法自动清理的问题
 - [x] 更新 AI 接手文档，明确核心链路优先按 TDD 执行
 - [x] 配置提交前自动执行 verify（lint + typecheck + test）
 

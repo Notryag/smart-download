@@ -17,6 +17,11 @@ export interface Aria2TellStatusResult {
   dir?: string
 }
 
+export interface Aria2UriResult {
+  uri: string
+  status: string
+}
+
 export interface RuntimeSession {
   taskId: string
   gid: string
