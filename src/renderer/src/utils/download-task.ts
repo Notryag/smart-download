@@ -20,6 +20,25 @@ export function formatProgress(value: number): string {
   return `${Math.round(value * 100)}%`
 }
 
+export function formatEtaSeconds(value?: number): string {
+  if (typeof value !== 'number' || value < 0) {
+    return '--'
+  }
+
+  if (value < 60) {
+    return `${value}s`
+  }
+
+  const hours = Math.floor(value / 3600)
+  const minutes = Math.floor((value % 3600) / 60)
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`
+  }
+
+  return `${minutes}m`
+}
+
 export function formatStatus(status: DownloadTask['status']): string {
   switch (status) {
     case 'metadata':

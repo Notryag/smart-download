@@ -52,11 +52,13 @@ export function NewTaskModal({
           <label className="field">
             <span>下载地址</span>
             <textarea
+              autoFocus
               placeholder="magnet:?xt=urn:btih:..."
               rows={4}
               value={form.source}
               onChange={(event) => onFieldChange('source', event.target.value)}
             />
+            <small className="field-hint">当前阶段仅支持 magnet 链接。</small>
           </label>
 
           <label className="field">
@@ -67,6 +69,7 @@ export function NewTaskModal({
               value={form.savePath}
               onChange={(event) => onFieldChange('savePath', event.target.value)}
             />
+            <small className="field-hint">请输入本地下载目录，例如 `D:\Downloads`。</small>
           </label>
 
           <label className="field">
@@ -77,6 +80,7 @@ export function NewTaskModal({
               value={form.name}
               onChange={(event) => onFieldChange('name', event.target.value)}
             />
+            <small className="field-hint">不填时将使用系统生成的默认任务名。</small>
           </label>
 
           {errorMessage ? <p className="feedback error">{errorMessage}</p> : null}

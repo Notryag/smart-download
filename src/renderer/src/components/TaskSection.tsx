@@ -4,6 +4,7 @@ import {
   canResumeTask,
   formatBytes,
   formatDate,
+  formatEtaSeconds,
   formatProgress,
   formatStatus
 } from '../utils/download-task'
@@ -30,6 +31,9 @@ export function TaskSection({
   onTaskAction
 }: TaskSectionProps): React.JSX.Element {
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null
+  const activeTasks = tasks.filter((task) => ['pending', 'metadata', 'downloading'].includes(task.status))
+  const failedTasks = tasks.filter((task) => task.status === 'failed')
+  const pausedTasks = tasks.filter((task) => task.status === 'paused')
 
   return (
     <section className="task-section panel">
@@ -38,7 +42,14 @@ export function TaskSection({
           <span className="panel-kicker">Task list</span>
           <h2>下载任务</h2>
         </div>
-        <span className="task-count">{tasks.length} 个任务</span>
+        <div className="task-toolbar">
+          <span className="task-count">{tasks.length} 个任务</span>
+          <div className="task-filter-summary">
+            <span>{activeTasks.length} 进行中</span>
+            <span>{failedTasks.length} 失败</span>
+            <span>{pausedTasks.length} 已暂停</span>
+          </div>
+        </div>
       </header>
 
       {listErrorMessage ? <p className="feedback error">{listErrorMessage}</p> : null}
@@ -69,7 +80,7 @@ export function TaskSection({
                 <div className="task-card-header">
                   <div>
                     <strong>{task.name}</strong>
-                    <p>{task.id}</p>
+                    <p>{task.remoteId ?? task.id}</p>
                   </div>
                   <span className={`status-badge status-${task.status}`}>
                     {formatStatus(task.status)}
@@ -77,10 +88,16 @@ export function TaskSection({
                 </div>
 
                 <div className="task-progress-row">
+                  <div className="task-progress-main">
+                    <strong>{formatProgress(task.progress)}</strong>
+                    <span>
+                      {formatBytes(task.downloadedBytes)}
+                      {typeof task.totalBytes === 'number' ? ` / ${formatBytes(task.totalBytes)}` : ''}
+                    </span>
+                  </div>
                   <div className="task-progress-bar">
                     <span style={{ width: `${task.progress * 100}%` }} />
                   </div>
-                  <strong>{formatProgress(task.progress)}</strong>
                 </div>
 
                 <dl className="task-meta-grid">
@@ -93,18 +110,12 @@ export function TaskSection({
                     <dd>{formatBytes(task.downloadedBytes)}</dd>
                   </div>
                   <div>
-                    <dt>总大小</dt>
-                    <dd>
-                      {typeof task.totalBytes === 'number'
-                        ? formatBytes(task.totalBytes)
-                        : '待确定'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>剩余</dt>
-                    <dd>{typeof task.etaSeconds === 'number' ? `${task.etaSeconds}s` : '--'}</dd>
+                    <dt>ETA</dt>
+                    <dd>{formatEtaSeconds(task.etaSeconds)}</dd>
                   </div>
                 </dl>
+
+                {task.errorMessage ? <p className="task-inline-error">{task.errorMessage}</p> : null}
               </article>
             ))}
           </div>
@@ -151,7 +162,7 @@ export function TaskSection({
                 <div className="task-detail-title-row">
                   <div>
                     <strong>{selectedTask.name}</strong>
-                    <p>{selectedTask.id}</p>
+                    <p>{selectedTask.remoteId ?? selectedTask.id}</p>
                   </div>
                   <span className={`status-badge status-${selectedTask.status}`}>
                     {formatStatus(selectedTask.status)}
@@ -172,6 +183,25 @@ export function TaskSection({
                     <dd className="break-all">{selectedTask.savePath}</dd>
                   </div>
                   <div>
+                    <dt>已下载 / 总大小</dt>
+                    <dd>
+                      {formatBytes(selectedTask.downloadedBytes)}
+                      {typeof selectedTask.totalBytes === 'number'
+                        ? ` / ${formatBytes(selectedTask.totalBytes)}`
+                        : ' / 待确定'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>当前速度 / ETA</dt>
+                    <dd>
+                      {formatBytes(selectedTask.speedBytes)}/s · {formatEtaSeconds(selectedTask.etaSeconds)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>数据来源</dt>
+                    <dd className="break-all">{selectedTask.source}</dd>
+                  </div>
+                  <div>
                     <dt>创建时间</dt>
                     <dd>{formatDate(selectedTask.createdAt)}</dd>
                   </div>
@@ -180,22 +210,14 @@ export function TaskSection({
                     <dd>{formatDate(selectedTask.updatedAt)}</dd>
                   </div>
                   <div>
-                    <dt>数据来源</dt>
-                    <dd className="break-all">{selectedTask.source}</dd>
+                    <dt>任务 ID</dt>
+                    <dd className="break-all">{selectedTask.id}</dd>
                   </div>
                   <div>
                     <dt>远端任务 ID</dt>
                     <dd className="break-all">{selectedTask.remoteId ?? '待分配'}</dd>
                   </div>
-                  <div>
-                    <dt>下载进度</dt>
-                    <dd>{formatProgress(selectedTask.progress)}</dd>
-                  </div>
-                  <div>
-                    <dt>当前速度</dt>
-                    <dd>{formatBytes(selectedTask.speedBytes)}/s</dd>
-                  </div>
-                  <div>
+                  <div className="task-detail-full-row">
                     <dt>错误状态</dt>
                     <dd>{selectedTask.errorMessage ?? '无'}</dd>
                   </div>
