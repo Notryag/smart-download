@@ -4,10 +4,11 @@ import { createServer } from 'node:net'
 import { spawn, type ChildProcess } from 'node:child_process'
 import type { App } from 'electron'
 import { Aria2RpcClient, type Aria2ClientConfig } from '../../adapters'
-import type { InMemoryLogger } from '../../core'
+import { BT_BOOTSTRAP_HOSTS, type InMemoryLogger } from '../../core'
 
 const STARTUP_TIMEOUT_MS = 15_000
 const STARTUP_POLL_INTERVAL_MS = 250
+const BT_DHT_BOOTSTRAP_PORT = 6881
 
 export interface ManagedAria2StartResult {
   config: Aria2ClientConfig | null
@@ -211,6 +212,7 @@ export class ManagedAria2Service {
         category: 'aria2-runtime',
         details: {
           binaryPath,
+          dhtEntryPoint: `${BT_BOOTSTRAP_HOSTS[0]}:${BT_DHT_BOOTSTRAP_PORT}`,
           downloadDir,
           rpcUrl: this.managedConfig.rpcUrl,
           sessionPath
@@ -225,11 +227,13 @@ export class ManagedAria2Service {
         `--rpc-secret=${secret}`,
         '--rpc-allow-origin-all=false',
         '--enable-dht=true',
+        '--enable-dht6=true',
         '--enable-peer-exchange=true',
         '--continue=true',
         '--max-concurrent-downloads=3',
         '--check-certificate=true',
         '--file-allocation=none',
+        `--dht-entry-point=${BT_BOOTSTRAP_HOSTS[0]}:${BT_DHT_BOOTSTRAP_PORT}`,
         `--dht-file-path=${dhtPath}`,
         `--dht-file-path6=${dht6Path}`,
         '--save-session-interval=1',

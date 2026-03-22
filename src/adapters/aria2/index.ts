@@ -17,6 +17,7 @@ import {
   assertSource,
   buildSnapshot,
   buildAddUriOptions,
+  normalizeMagnetSourceForAria2,
   buildSourcePreview,
   getErrorMessage,
   isMissingGidErrorMessage,
@@ -101,11 +102,13 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     const client = this.getClientOrThrow()
     const now = toIsoNow()
     const source = input.source.trim()
+    const requestSource = normalizeMagnetSourceForAria2(source)
     const savePath = input.savePath.trim()
     const options = buildAddUriOptions(source, savePath)
     this.logger?.info('Submitting task to aria2 RPC', {
       category: 'aria2-adapter',
       details: {
+        addedFallbackTrackers: requestSource.addedTrackerCount,
         savePath,
         sourcePreview: buildSourcePreview(input.source)
       },
@@ -113,7 +116,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     })
     const gid = await attachUriWithDuplicateCleanup({
       client,
-      source,
+      source: requestSource.source,
       options,
       taskId: input.taskId,
       logger: this.logger,

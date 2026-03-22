@@ -7,6 +7,12 @@ import type { Aria2TellStatusResult, RuntimeSession } from './types'
 export const ARIA2_STATE_SETTLE_TIMEOUT_MS = 5_000
 export const ARIA2_STATE_SETTLE_INTERVAL_MS = 150
 export const ARIA2_DIAGNOSTIC_LOG_INTERVAL_MS = 30_000
+export const ARIA2_FALLBACK_TRACKERS = [
+  'udp://tracker.opentrackr.org:1337/announce',
+  'udp://open.stealth.si:80/announce',
+  'udp://tracker.torrent.eu.org:451/announce',
+  'udp://exodus.desync.com:6969/announce'
+] as const
 
 export function toIsoNow(): string {
   return new Date().toISOString()
@@ -23,6 +29,48 @@ export function isMissingGidErrorMessage(message: string): boolean {
 export function assertSource(source: string): void {
   if (source.trim().length === 0) {
     throw new Error('下载地址不能为空。')
+  }
+}
+
+export function normalizeMagnetSourceForAria2(source: string): {
+  source: string
+  addedTrackerCount: number
+} {
+  const normalizedSource = source.trim()
+
+  try {
+    const magnet = new URL(normalizedSource)
+
+    if (magnet.protocol !== 'magnet:') {
+      return {
+        source: normalizedSource,
+        addedTrackerCount: 0
+      }
+    }
+
+    const existingTrackers = new Set(
+      magnet.searchParams.getAll('tr').map((tracker) => tracker.trim().toLowerCase())
+    )
+    let addedTrackerCount = 0
+
+    for (const tracker of ARIA2_FALLBACK_TRACKERS) {
+      if (existingTrackers.has(tracker.toLowerCase())) {
+        continue
+      }
+
+      magnet.searchParams.append('tr', tracker)
+      addedTrackerCount += 1
+    }
+
+    return {
+      source: magnet.toString(),
+      addedTrackerCount
+    }
+  } catch {
+    return {
+      source: normalizedSource,
+      addedTrackerCount: 0
+    }
   }
 }
 

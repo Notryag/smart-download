@@ -63,6 +63,7 @@
 - [x] 为 magnet 长时间停留在 metadata 且无 peer 的场景补充用户可读提示
 - [x] 修复删除任务时旧 GID 已失效仍中断清理的问题，改为继续按 source 收口残留
 - [x] 修复删除任务时关联 aria2 清理请求失败会误报删除失败的问题，并补充回归测试与诊断日志
+- [x] 为托管 aria2 补 DHT bootstrap 和 magnet fallback trackers，缓解 fresh runtime 下 magnet 长时间卡在 metadata 的问题
 - [x] 将托管 aria2 运行时改为应用内隔离配置，避免宿主全局 BT / DHT 配置干扰
 - [x] 在任务列表和详情区显示当前做种数，方便判断 magnet 是否有可用来源
 - [x] 更新 AI 接手文档，明确核心链路优先按 TDD 执行

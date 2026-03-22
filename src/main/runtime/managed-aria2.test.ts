@@ -136,6 +136,8 @@ describe('ManagedAria2Service', () => {
     const [, args] = childProcessMocks.spawn.mock.calls[0] ?? []
 
     expect(args).toContain('--no-conf=true')
+    expect(args).toContain('--enable-dht6=true')
+    expect(args).toContain('--dht-entry-point=router.bittorrent.com:6881')
     expect(args).toContain(`--dht-file-path=${join(userDataPath, 'aria2', 'dht.dat')}`)
     expect(args).toContain(`--dht-file-path6=${join(userDataPath, 'aria2', 'dht6.dat')}`)
   })

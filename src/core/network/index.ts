@@ -1,6 +1,6 @@
 import { lookup } from 'node:dns/promises'
 
-const BT_BOOTSTRAP_HOSTS = ['router.bittorrent.com', 'dht.transmissionbt.com']
+export const BT_BOOTSTRAP_HOSTS = ['router.bittorrent.com', 'dht.transmissionbt.com'] as const
 
 export interface NetworkChecker {
   assertBtNetworkReady(): Promise<void>

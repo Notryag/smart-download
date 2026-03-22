@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { Aria2DownloadAdapter } from './index'
+import { ARIA2_FALLBACK_TRACKERS } from './utils'
 
 function createRpcResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -83,14 +84,21 @@ it('attaches a task through aria2 RPC and returns the first snapshot', async () 
   }
 
   expect(addUriRequest.method).toBe('aria2.addUri')
-  expect(addUriRequest.params).toEqual([
-    'token:rpc-secret',
-    ['magnet:?xt=urn:btih:1234567890123456789012345678901234567890'],
-    {
-      dir: 'D:\\Downloads',
-      pause: 'true'
-    }
-  ])
+  expect(addUriRequest.params[0]).toBe('token:rpc-secret')
+  expect(addUriRequest.params[1]).toHaveLength(1)
+  const attachedMagnet = new URL(String(addUriRequest.params[1]?.[0]))
+
+  expect(attachedMagnet.protocol).toBe('magnet:')
+  expect(attachedMagnet.searchParams.get('xt')).toBe(
+    'urn:btih:1234567890123456789012345678901234567890'
+  )
+  for (const tracker of ARIA2_FALLBACK_TRACKERS) {
+    expect(attachedMagnet.searchParams.getAll('tr')).toContain(tracker)
+  }
+  expect(addUriRequest.params[2]).toEqual({
+    dir: 'D:\\Downloads',
+    pause: 'true'
+  })
   expect(tellStatusRequest.method).toBe('aria2.tellStatus')
   expect(tellStatusRequest.params).toEqual(['token:rpc-secret', 'gid-1'])
 })

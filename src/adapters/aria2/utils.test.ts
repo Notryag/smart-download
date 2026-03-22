@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import type { RuntimeSession } from './types'
 import {
+  ARIA2_FALLBACK_TRACKERS,
   assertSource,
   buildSnapshot,
   isSettledTaskStatus,
+  normalizeMagnetSourceForAria2,
   toRuntimeStatusMessage
 } from './utils'
 
@@ -126,6 +128,16 @@ describe('aria2 utils', () => {
     expect(toRuntimeStatusMessage(new Error('401 unauthorized'))).toBe(
       'aria2 RPC 检查失败：401 unauthorized'
     )
+  })
+
+  it('appends fallback trackers to magnet sources without duplicating existing entries', () => {
+    const normalized = normalizeMagnetSourceForAria2(
+      `magnet:?xt=urn:btih:1234567890123456789012345678901234567890&tr=${encodeURIComponent(ARIA2_FALLBACK_TRACKERS[0])}`
+    )
+    const trackers = new URL(normalized.source).searchParams.getAll('tr')
+
+    expect(normalized.addedTrackerCount).toBe(ARIA2_FALLBACK_TRACKERS.length - 1)
+    expect(trackers).toEqual([ARIA2_FALLBACK_TRACKERS[0], ...ARIA2_FALLBACK_TRACKERS.slice(1)])
   })
 
   it('rejects blank sources early', () => {

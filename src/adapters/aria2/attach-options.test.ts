@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Aria2DownloadAdapter } from './index'
+import { ARIA2_FALLBACK_TRACKERS } from './utils'
 
 function createRpcResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -73,14 +74,20 @@ describe('Aria2DownloadAdapter attach options', () => {
       }
 
       expect(addUriRequest.method).toBe('aria2.addUri')
-      expect(addUriRequest.params).toEqual([
-        ['magnet:?xt=urn:btih:1234567890123456789012345678901234567890&dn=ubuntu.iso'],
-        {
-          dir: savePath,
-          'index-out': '1=ubuntu (1).iso',
-          pause: 'true'
-        }
-      ])
+      const attachedMagnet = new URL(String(addUriRequest.params[0]?.[0]))
+
+      expect(attachedMagnet.searchParams.get('xt')).toBe(
+        'urn:btih:1234567890123456789012345678901234567890'
+      )
+      expect(attachedMagnet.searchParams.get('dn')).toBe('ubuntu.iso')
+      for (const tracker of ARIA2_FALLBACK_TRACKERS) {
+        expect(attachedMagnet.searchParams.getAll('tr')).toContain(tracker)
+      }
+      expect(addUriRequest.params[1]).toEqual({
+        dir: savePath,
+        'index-out': '1=ubuntu (1).iso',
+        pause: 'true'
+      })
     } finally {
       rmSync(savePath, { force: true, recursive: true })
     }
