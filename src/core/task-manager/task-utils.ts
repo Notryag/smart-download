@@ -62,6 +62,29 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
   })
 }
 
+export function resolveRuntimeTaskMessage(
+  previousTask: DownloadTask,
+  nextTask: DownloadTask
+): string | undefined {
+  if (nextTask.errorMessage) {
+    return nextTask.errorMessage
+  }
+
+  const isStalled =
+    nextTask.speedBytes === 0 &&
+    nextTask.downloadedBytes === previousTask.downloadedBytes
+
+  if (nextTask.status === 'metadata' && isStalled) {
+    return '正在获取种子元数据；当前未连接到可用 peer，或 tracker 暂未返回可用节点。'
+  }
+
+  if (nextTask.status === 'downloading' && isStalled) {
+    return '当前下载速度为 0；可能暂无可用 peer，或网络暂时不可达。'
+  }
+
+  return undefined
+}
+
 function resolveTaskType(source: string): DownloadTask['type'] {
   return source.trim().startsWith('magnet:?') ? 'magnet' : 'uri'
 }

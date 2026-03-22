@@ -13,6 +13,7 @@ import {
   createPendingMagnetTask,
   getErrorMessage,
   needsRuntimeSession,
+  resolveRuntimeTaskMessage,
   restoreTaskState,
   updateTask
 } from './task-utils'
@@ -114,7 +115,10 @@ export class InMemoryTaskManager {
       })
 
       const startedSnapshot = await this.downloadAdapter.startTask({ taskId: task.id })
-      const startedTask = applySnapshot(attachedTask, startedSnapshot)
+      const startedNextTask = applySnapshot(attachedTask, startedSnapshot)
+      const startedTask = updateTask(startedNextTask, {
+        errorMessage: resolveRuntimeTaskMessage(attachedTask, startedNextTask)
+      })
 
       if (startedTask.status === 'failed' || startedTask.status === 'canceled') {
         throw new Error(startedTask.errorMessage ?? '创建下载任务失败')
@@ -159,7 +163,10 @@ export class InMemoryTaskManager {
 
         try {
           const snapshot = await this.downloadAdapter.getTaskSnapshot({ taskId: task.id })
-          const syncedTask = applySnapshot(task, snapshot)
+          const nextTask = applySnapshot(task, snapshot)
+          const syncedTask = updateTask(nextTask, {
+            errorMessage: resolveRuntimeTaskMessage(task, nextTask)
+          })
           const statusChanged = syncedTask.status !== task.status
           const progressChanged = syncedTask.progress !== task.progress
           const taskChanged = syncedTask !== task

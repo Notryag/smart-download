@@ -126,6 +126,28 @@ describe('InMemoryTaskManager', () => {
     expect(store.tasks.get(task.id)?.status).toBe('downloading')
   })
 
+  it('surfaces a readable message when metadata fetch has no available peers yet', async () => {
+    const adapter = createAdapterMock()
+    adapter.startTask = vi.fn(async ({ taskId }) =>
+      createSnapshot(taskId, `gid-${taskId}`, {
+        status: 'metadata',
+        totalBytes: 0,
+        downloadedBytes: 0,
+        speedBytes: 0,
+        progress: 0
+      })
+    )
+
+    const { taskManager } = createManagerHarness(adapter)
+    const task = await taskManager.createTask({
+      source: 'magnet:?xt=urn:btih:1234567890123456789012345678901234567890',
+      savePath: 'D:\\Downloads'
+    })
+
+    expect(task.status).toBe('metadata')
+    expect(task.errorMessage).toContain('当前未连接到可用 peer')
+  })
+
   it('rolls back the remote task when start fails after attach', async () => {
     const adapter = createAdapterMock()
     adapter.startTask = vi.fn(async () => {
