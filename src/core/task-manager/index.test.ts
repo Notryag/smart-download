@@ -149,6 +149,32 @@ describe('InMemoryTaskManager', () => {
     expect(failedTask.errorMessage).toContain('aria2 start failed')
   })
 
+  it('rolls back the remote task when start returns a failed snapshot', async () => {
+    const adapter = createAdapterMock()
+    adapter.startTask = vi.fn(async ({ taskId }) =>
+      createSnapshot(taskId, `gid-${taskId}`, {
+        status: 'failed',
+        errorMessage: '该 magnet 任务已存在于 aria2 下载队列中'
+      })
+    )
+
+    const { taskManager } = createManagerHarness(adapter)
+
+    await expect(
+      taskManager.createTask({
+        source: 'magnet:?xt=urn:btih:1234567890123456789012345678901234567890',
+        savePath: 'D:\\Downloads'
+      })
+    ).rejects.toThrow('该 magnet 任务已存在于 aria2 下载队列中')
+
+    expect(adapter.deleteTask).toHaveBeenCalledOnce()
+
+    const [failedTask] = await taskManager.listTasks()
+    expect(failedTask.status).toBe('failed')
+    expect(failedTask.remoteId).toBeUndefined()
+    expect(failedTask.errorMessage).toContain('该 magnet 任务已存在于 aria2 下载队列中')
+  })
+
   it('surfaces rollback failure in the task error message', async () => {
     const adapter = createAdapterMock()
     adapter.startTask = vi.fn(async () => {

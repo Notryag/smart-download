@@ -116,6 +116,10 @@ export class InMemoryTaskManager {
       const startedSnapshot = await this.downloadAdapter.startTask({ taskId: task.id })
       const startedTask = applySnapshot(attachedTask, startedSnapshot)
 
+      if (startedTask.status === 'failed' || startedTask.status === 'canceled') {
+        throw new Error(startedTask.errorMessage ?? '创建下载任务失败')
+      }
+
       this.tasks.set(task.id, startedTask)
       await this.taskStore.upsertTask(startedTask)
       this.logger.info(`Started task in ${startedTask.status} state`, {
