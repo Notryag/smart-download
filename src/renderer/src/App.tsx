@@ -32,6 +32,7 @@ function App(): React.JSX.Element {
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [listErrorMessage, setListErrorMessage] = useState('')
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null
 
   useEffect(() => {
     function applyDashboard(snapshot: DownloadDashboardSnapshot): void {
@@ -166,9 +167,12 @@ function App(): React.JSX.Element {
     <>
       <main className="app-shell">
         <AppHeader
+          actionTaskId={actionTaskId}
           diagnostics={diagnostics}
+          selectedTask={selectedTask}
           successMessage={successMessage}
           onCreateTask={openModal}
+          onTaskAction={handleTaskAction}
         />
         <TaskSection
           actionTaskId={actionTaskId}
@@ -183,6 +187,20 @@ function App(): React.JSX.Element {
           <DiagnosticsPanel diagnostics={diagnostics} />
           <RecentLogsPanel diagnostics={diagnostics} />
         </section>
+
+        <footer className="workspace-statusbar panel">
+          <div className="workspace-statusbar-group">
+            <span className={`status-indicator${diagnostics?.runtime.ready ? ' status-indicator-ready' : ''}`} />
+            <strong>{diagnostics?.runtime.ready ? 'aria2 已连接' : 'aria2 待处理'}</strong>
+            <span>{diagnostics?.runtime.message ?? '正在读取运行状态。'}</span>
+          </div>
+          <div className="workspace-statusbar-group workspace-statusbar-metrics">
+            <span>总任务 {diagnostics?.taskStats.total ?? tasks.length}</span>
+            <span>进行中 {diagnostics?.taskStats.active ?? 0}</span>
+            <span>失败 {diagnostics?.taskStats.failed ?? 0}</span>
+            <span>已完成 {diagnostics?.taskStats.completed ?? 0}</span>
+          </div>
+        </footer>
       </main>
 
       <NewTaskModal

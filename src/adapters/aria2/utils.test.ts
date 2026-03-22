@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import type { RuntimeSession } from './types'
-import { assertSource, buildSnapshot, isSettledTaskStatus, toRuntimeStatusMessage } from './utils'
+import {
+  assertSource,
+  buildSnapshot,
+  isSettledTaskStatus,
+  toRuntimeStatusMessage
+} from './utils'
 
 function createSession(patch: Partial<RuntimeSession> = {}): RuntimeSession {
   return {
@@ -92,6 +97,22 @@ describe('aria2 utils', () => {
     expect(isSettledTaskStatus(paused.status)).toBe(true)
     expect(isSettledTaskStatus(completed.status)).toBe(true)
     expect(isSettledTaskStatus(failed.status)).toBe(true)
+  })
+
+  it('translates aria2 file-conflict errors into user-readable chinese messages', () => {
+    const snapshot = buildSnapshot(createSession(), {
+      gid: 'gid-1',
+      status: 'error',
+      totalLength: '5702520832',
+      completedLength: '0',
+      downloadSpeed: '0',
+      errorMessage:
+        'File D:/ubuntu-25.10-desktop-amd64.iso exists, but a control file(*.aria2) does not exist. Download was canceled in order to prevent your file from being truncated to 0. If you are sure to download the file all over again, then delete it or add --allow-overwrite=true option and restart aria2.'
+    })
+
+    expect(snapshot.errorMessage).toBe(
+      '目标文件已存在：D:/ubuntu-25.10-desktop-amd64.iso。为避免覆盖现有文件，本次下载已取消。请删除原文件，或改用新的文件名后重试。'
+    )
   })
 
   it('converts transport errors into user-readable runtime status messages', () => {

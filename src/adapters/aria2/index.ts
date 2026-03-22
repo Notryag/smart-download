@@ -13,6 +13,7 @@ import {
   ARIA2_DIAGNOSTIC_LOG_INTERVAL_MS,
   assertSource,
   buildSnapshot,
+  buildAddUriOptions,
   buildSourcePreview,
   getErrorMessage,
   isSettledTaskStatus,
@@ -196,10 +197,8 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     let gid: string
 
     try {
-      gid = await client.addUri([input.source.trim()], {
-        dir: input.savePath.trim(),
-        pause: 'true'
-      })
+      const options = buildAddUriOptions(input.source, input.savePath)
+      gid = await client.addUri([input.source.trim()], options)
     } catch (error) {
       const message = getErrorMessage(error, 'aria2 创建任务失败')
 
@@ -215,10 +214,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
         taskId: input.taskId
       })
       await this.cleanupRelatedTasksBySource(input.source)
-      gid = await client.addUri([input.source.trim()], {
-        dir: input.savePath.trim(),
-        pause: 'true'
-      })
+      gid = await client.addUri([input.source.trim()], buildAddUriOptions(input.source, input.savePath))
     }
 
     const session = this.sessionStore.createSession({

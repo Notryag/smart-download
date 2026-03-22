@@ -229,6 +229,7 @@ describe('Aria2DownloadAdapter attach flow', () => {
       'aria2.tellStatus'
     ])
   })
+
 })
 
 describe('Aria2DownloadAdapter snapshot and cleanup flow', () => {

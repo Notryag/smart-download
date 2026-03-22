@@ -79,23 +79,25 @@ function TaskFilterRail({
   return (
     <aside className="task-filter-rail">
       <header className="task-filter-rail-header">
-        <span className="panel-kicker">Categories</span>
-        <h3>任务分类</h3>
+        <span className="panel-kicker">Views</span>
+        <h3>分类</h3>
       </header>
 
       <div className="task-filter-list">
         {FILTER_ITEMS.map((item) => (
           <button
             key={item.id}
+            aria-label={`${item.label}（${getFilterCount(item.id)}）`}
             className={`task-filter-item${filter === item.id ? ' task-filter-item-active' : ''}`}
+            title={item.description}
             type="button"
             onClick={() => onFilterChange(item.id)}
           >
-            <span className="task-filter-topline">
-              <strong>{item.label}</strong>
-              <span>{getFilterCount(item.id)}</span>
+            <span className="task-filter-icon" aria-hidden="true">
+              <TaskFilterIcon filter={item.id} />
             </span>
-            <small>{item.description}</small>
+            <strong>{getFilterCount(item.id)}</strong>
+            <small>{item.label}</small>
           </button>
         ))}
       </div>
@@ -112,16 +114,31 @@ function TaskQueuePanel({
   return (
     <section className="task-list-panel">
       <header className="task-list-panel-header">
-        <span className="panel-kicker">Queue</span>
-        <h3>{FILTER_ITEMS.find((item) => item.id === currentFilter)?.label ?? '全部任务'}</h3>
+        <div>
+          <span className="panel-kicker">Queue</span>
+          <h3>{FILTER_ITEMS.find((item) => item.id === currentFilter)?.label ?? '全部任务'}</h3>
+        </div>
+        <div className="task-list-panel-meta">
+          <span>{filteredTasks.length} 个结果</span>
+          <span>最近更新优先</span>
+        </div>
       </header>
 
-      <div className="task-list">
+      <div className="task-table">
+        <div className="task-table-head" aria-hidden="true">
+          <span>任务</span>
+          <span>状态</span>
+          <span>进度</span>
+          <span>大小</span>
+          <span>速度 / ETA</span>
+          <span>更新时间</span>
+        </div>
+
         {filteredTasks.length > 0 ? (
           filteredTasks.map((task) => (
             <article
               key={task.id}
-              className={`task-card${task.id === selectedTaskId ? ' task-card-selected' : ''}`}
+              className={`task-table-row${task.id === selectedTaskId ? ' task-table-row-selected' : ''}`}
               role="button"
               tabIndex={0}
               onClick={() => onSelectTask(task.id)}
@@ -132,49 +149,45 @@ function TaskQueuePanel({
                 }
               }}
             >
-              <div className="task-card-header">
-                <div>
-                  <strong>{task.name}</strong>
-                  <p>{task.savePath}</p>
-                </div>
+              <div className="task-primary-cell">
+                <strong>{task.name}</strong>
+                <p>{task.savePath}</p>
+                {task.errorMessage ? <span className="task-inline-error">{task.errorMessage}</span> : null}
+              </div>
+
+              <div className="task-status-cell">
                 <span className={`status-badge status-${task.status}`}>{formatStatus(task.status)}</span>
               </div>
 
-              <div className="task-progress-row">
-                <div className="task-progress-main">
-                  <strong>{formatProgress(task.progress)}</strong>
-                  <span>
-                    {formatBytes(task.downloadedBytes)}
-                    {typeof task.totalBytes === 'number'
-                      ? ` / ${formatBytes(task.totalBytes)}`
-                      : ' / 待确定'}
-                  </span>
-                </div>
+              <div className="task-progress-cell">
+                <strong>{formatProgress(task.progress)}</strong>
                 <div className="task-progress-bar">
                   <span style={{ width: `${task.progress * 100}%` }} />
                 </div>
               </div>
 
-              <dl className="task-meta-grid">
-                <div>
-                  <dt>速度</dt>
-                  <dd>{formatBytes(task.speedBytes)}/s</dd>
-                </div>
-                <div>
-                  <dt>大小</dt>
-                  <dd>{typeof task.totalBytes === 'number' ? formatBytes(task.totalBytes) : '待确定'}</dd>
-                </div>
-                <div>
-                  <dt>ETA</dt>
-                  <dd>{formatEtaSeconds(task.etaSeconds)}</dd>
-                </div>
-              </dl>
+              <div className="task-table-metric">
+                <strong>
+                  {typeof task.totalBytes === 'number' ? formatBytes(task.totalBytes) : '待确定'}
+                </strong>
+                <span>{formatBytes(task.downloadedBytes)} 已下载</span>
+              </div>
 
-              {task.errorMessage ? <p className="task-inline-error">{task.errorMessage}</p> : null}
+              <div className="task-table-metric">
+                <strong>{formatBytes(task.speedBytes)}/s</strong>
+                <span>ETA {formatEtaSeconds(task.etaSeconds)}</span>
+              </div>
+
+              <div className="task-table-metric">
+                <strong>{formatCompactDate(task.updatedAt)}</strong>
+                <span>{formatDate(task.updatedAt)}</span>
+              </div>
             </article>
           ))
         ) : (
-          <p className="empty-state">当前分类下还没有任务。</p>
+          <div className="task-table-empty">
+            <p className="empty-state">当前分类下还没有任务。</p>
+          </div>
         )}
       </div>
     </section>
@@ -197,7 +210,6 @@ export function TaskSection({
   const activeTasks = tasks.filter((task) => ['pending', 'metadata', 'downloading'].includes(task.status))
   const failedTasks = tasks.filter((task) => task.status === 'failed')
   const pausedTasks = tasks.filter((task) => task.status === 'paused')
-  const completedTasks = tasks.filter((task) => task.status === 'completed')
 
   useEffect(() => {
     if (filteredTasks.length === 0) {
@@ -223,7 +235,7 @@ export function TaskSection({
     }
 
     if (targetFilter === 'completed') {
-      return completedTasks.length
+      return tasks.filter((task) => task.status === 'completed').length
     }
 
     return failedTasks.length
@@ -233,8 +245,8 @@ export function TaskSection({
     <section className="task-section panel">
       <header className="task-section-header">
         <div>
-          <span className="panel-kicker">Task list</span>
-          <h2>下载任务</h2>
+          <span className="panel-kicker">Workspace</span>
+          <h2>下载工作区</h2>
         </div>
         <div className="task-toolbar">
           <span className="task-count">{tasks.length} 个任务</span>
@@ -248,10 +260,10 @@ export function TaskSection({
 
       {listErrorMessage ? <p className="feedback error">{listErrorMessage}</p> : null}
 
-      {isLoadingTasks ? <p className="empty-state">正在加载任务列表...</p> : null}
+      {isLoadingTasks ? <div className="workspace-empty-state">正在加载任务列表...</div> : null}
 
       {!isLoadingTasks && tasks.length === 0 ? (
-        <p className="empty-state">还没有任务。先创建一个下载任务。</p>
+        <div className="workspace-empty-state">还没有任务。先粘贴一个 magnet 链接创建下载。</div>
       ) : null}
 
       {!isLoadingTasks && tasks.length > 0 ? (
@@ -267,15 +279,38 @@ export function TaskSection({
 
           <aside className="task-detail">
             <header className="task-detail-header">
-              <span className="panel-kicker">Task detail</span>
-              <h3>任务详情</h3>
+              <div>
+                <span className="panel-kicker">Inspector</span>
+                <h3>任务详情</h3>
+              </div>
+              {selectedTask ? (
+                <span className={`status-badge status-${selectedTask.status}`}>
+                  {formatStatus(selectedTask.status)}
+                </span>
+              ) : null}
             </header>
 
             {selectedTask ? (
               <>
                 {selectedTask.errorMessage ? (
-                  <p className="feedback error">{selectedTask.errorMessage}</p>
+                  <p className="feedback error task-detail-alert">{selectedTask.errorMessage}</p>
                 ) : null}
+
+                <div className="task-detail-hero">
+                  <div>
+                    <strong>{selectedTask.name}</strong>
+                    <p>{selectedTask.remoteId ?? selectedTask.id}</p>
+                  </div>
+                  <div className="task-detail-progress">
+                    <span>{formatProgress(selectedTask.progress)}</span>
+                    <small>
+                      {formatBytes(selectedTask.downloadedBytes)}
+                      {typeof selectedTask.totalBytes === 'number'
+                        ? ` / ${formatBytes(selectedTask.totalBytes)}`
+                        : ' / 待确定'}
+                    </small>
+                  </div>
+                </div>
 
                 <div className="task-action-row">
                   <button
@@ -304,21 +339,22 @@ export function TaskSection({
                   </button>
                 </div>
 
-                <div className="task-detail-title-row">
-                  <div>
-                    <strong>{selectedTask.name}</strong>
-                    <p>{selectedTask.remoteId ?? selectedTask.id}</p>
-                  </div>
-                  <span className={`status-badge status-${selectedTask.status}`}>
-                    {formatStatus(selectedTask.status)}
-                  </span>
+                <div className="task-detail-stats">
+                  <article className="task-detail-stat">
+                    <span>当前速度</span>
+                    <strong>{formatBytes(selectedTask.speedBytes)}/s</strong>
+                  </article>
+                  <article className="task-detail-stat">
+                    <span>预计剩余</span>
+                    <strong>{formatEtaSeconds(selectedTask.etaSeconds)}</strong>
+                  </article>
+                  <article className="task-detail-stat">
+                    <span>任务类型</span>
+                    <strong>{selectedTask.type}</strong>
+                  </article>
                 </div>
 
                 <dl className="task-detail-grid">
-                  <div>
-                    <dt>任务类型</dt>
-                    <dd>{selectedTask.type}</dd>
-                  </div>
                   <div>
                     <dt>下载引擎</dt>
                     <dd>{selectedTask.engine}</dd>
@@ -326,21 +362,6 @@ export function TaskSection({
                   <div>
                     <dt>保存目录</dt>
                     <dd className="break-all">{selectedTask.savePath}</dd>
-                  </div>
-                  <div>
-                    <dt>已下载 / 总大小</dt>
-                    <dd>
-                      {formatBytes(selectedTask.downloadedBytes)}
-                      {typeof selectedTask.totalBytes === 'number'
-                        ? ` / ${formatBytes(selectedTask.totalBytes)}`
-                        : ' / 待确定'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>当前速度 / ETA</dt>
-                    <dd>
-                      {formatBytes(selectedTask.speedBytes)}/s · {formatEtaSeconds(selectedTask.etaSeconds)}
-                    </dd>
                   </div>
                   <div>
                     <dt>数据来源</dt>
@@ -358,10 +379,6 @@ export function TaskSection({
                     <dt>任务 ID</dt>
                     <dd className="break-all">{selectedTask.id}</dd>
                   </div>
-                  <div>
-                    <dt>远端任务 ID</dt>
-                    <dd className="break-all">{selectedTask.remoteId ?? '待分配'}</dd>
-                  </div>
                   <div className="task-detail-full-row">
                     <dt>错误状态</dt>
                     <dd>{selectedTask.errorMessage ?? '无'}</dd>
@@ -376,4 +393,87 @@ export function TaskSection({
       ) : null}
     </section>
   )
+}
+
+function TaskFilterIcon({ filter }: { filter: TaskWorkspaceFilter }): React.JSX.Element {
+  if (filter === 'all') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path
+          d="M5 7H19M5 12H19M5 17H19"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="1.8"
+        />
+      </svg>
+    )
+  }
+
+  if (filter === 'active') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path
+          d="M5 15L10 10L13 13L19 7M19 7V12M19 7H14"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+        />
+      </svg>
+    )
+  }
+
+  if (filter === 'paused') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path
+          d="M9 6V18M15 6V18"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="1.8"
+        />
+      </svg>
+    )
+  }
+
+  if (filter === 'completed') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path
+          d="M5 12L10 17L19 8"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+        />
+      </svg>
+    )
+  }
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path
+        d="M12 7V12M12 16H12.01M12 3C7.029 3 3 7.029 3 12S7.029 21 12 21S21 16.971 21 12S16.971 3 12 3Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  )
+}
+
+function formatCompactDate(value: string): string {
+  return new Date(value).toLocaleString('zh-CN', {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    month: '2-digit'
+  })
 }

@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { basename, join, parse } from 'node:path'
 import type { DownloadTaskSnapshot } from '../download'
 import type { DownloadTaskStatus } from '../../types'
 import type { Aria2TellStatusResult, RuntimeSession } from './types'
@@ -95,12 +97,93 @@ export function buildSnapshot(
     speedBytes,
     progress,
     etaSeconds: parseEtaSeconds(totalBytes, downloadedBytes, speedBytes),
-    errorMessage: result.errorMessage,
+    errorMessage: translateAria2ErrorMessage(result.errorMessage),
     updatedAt: toIsoNow()
   }
+}
+
+export function buildAddUriOptions(source: string, savePath: string): Record<string, string> {
+  const options: Record<string, string> = {
+    dir: savePath.trim(),
+    pause: 'true'
+  }
+  const renamedOutput = resolveRenamedOutputForSingleFileMagnet(source, savePath)
+
+  if (renamedOutput) {
+    options['index-out'] = `1=${renamedOutput}`
+  }
+
+  return options
 }
 
 export function buildSourcePreview(source: string): string {
   const normalized = source.trim()
   return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized
+}
+
+function translateAria2ErrorMessage(message?: string): string | undefined {
+  if (!message) {
+    return message
+  }
+
+  const fileConflictMatch = message.match(
+    /^File (.+) exists, but a control file\(\*\.aria2\) does not exist\./
+  )
+
+  if (fileConflictMatch) {
+    return `目标文件已存在：${fileConflictMatch[1]}。为避免覆盖现有文件，本次下载已取消。请删除原文件，或改用新的文件名后重试。`
+  }
+
+  const duplicateMatch = message.match(/^InfoHash ([a-f0-9]+) is already registered\./i)
+
+  if (duplicateMatch) {
+    return `该 magnet 任务已存在于 aria2 下载队列中：${duplicateMatch[1]}。请不要重复创建，或先删除旧任务后再试。`
+  }
+
+  return message
+}
+
+function resolveRenamedOutputForSingleFileMagnet(source: string, savePath: string): string | null {
+  const displayName = getMagnetDisplayName(source)
+
+  if (!displayName) {
+    return null
+  }
+
+  if (!existsSync(join(savePath.trim(), displayName))) {
+    return null
+  }
+
+  return findNextAvailableFileName(displayName, savePath.trim())
+}
+
+function getMagnetDisplayName(source: string): string | null {
+  try {
+    const displayName = new URL(source.trim()).searchParams.get('dn')?.trim()
+
+    if (!displayName) {
+      return null
+    }
+
+    const normalized = basename(displayName)
+    return normalized.length > 0 ? normalized : null
+  } catch {
+    return null
+  }
+}
+
+function findNextAvailableFileName(fileName: string, savePath: string): string {
+  const parsed = parse(fileName)
+  const baseName = parsed.name || fileName
+  const extension = parsed.ext
+
+  for (let index = 1; index < 10_000; index += 1) {
+    const candidate = `${baseName} (${index})${extension}`
+
+    if (!existsSync(join(savePath, candidate))) {
+      return candidate
+    }
+  }
+
+  return `${baseName} (${Date.now()})${extension}`
 }

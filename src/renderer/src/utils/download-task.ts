@@ -20,8 +20,8 @@ export function formatBytes(value: number): string {
   }
 
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const unitIndex = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1)
-  const normalized = value / 1024 ** unitIndex
+  const unitIndex = Math.min(Math.floor(Math.log10(value) / 3), units.length - 1)
+  const normalized = value / 1000 ** unitIndex
 
   return `${normalized.toFixed(normalized >= 100 ? 0 : 1)} ${units[unitIndex]}`
 }
