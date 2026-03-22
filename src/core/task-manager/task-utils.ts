@@ -57,6 +57,7 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
     downloadedBytes: snapshot.downloadedBytes,
     totalBytes: snapshot.totalBytes,
     speedBytes: snapshot.speedBytes,
+    seedersCount: snapshot.seedersCount,
     etaSeconds: snapshot.etaSeconds,
     errorMessage: snapshot.errorMessage
   })

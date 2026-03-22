@@ -49,6 +49,14 @@ export function formatEtaSeconds(value?: number): string {
   return `${minutes}m`
 }
 
+export function formatSeedersCount(value?: number): string {
+  if (typeof value !== 'number' || value < 0) {
+    return '--'
+  }
+
+  return String(value)
+}
+
 export function formatStatus(status: DownloadTask['status']): string {
   switch (status) {
     case 'metadata':
@@ -75,6 +83,16 @@ export function formatDate(value: string): string {
   })
 }
 
+export function formatCompactDate(value: string): string {
+  return new Date(value).toLocaleString('zh-CN', {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    month: '2-digit'
+  })
+}
+
 export function formatLogLevel(level: 'info' | 'warning' | 'error'): string {
   if (level === 'error') {
     return '错误'
@@ -93,6 +111,10 @@ export function canPauseTask(task: DownloadTask): boolean {
 
 export function canResumeTask(task: DownloadTask): boolean {
   return task.status === 'paused'
+}
+
+export function getTaskMessageTone(task: DownloadTask): 'error' | 'warning' {
+  return task.status === 'paused' ? 'warning' : 'error'
 }
 
 export function matchesTaskWorkspaceFilter(

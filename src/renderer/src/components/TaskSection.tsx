@@ -5,10 +5,13 @@ import {
   canPauseTask,
   canResumeTask,
   formatBytes,
+  formatCompactDate,
   formatDate,
   formatEtaSeconds,
   formatProgress,
+  formatSeedersCount,
   formatStatus,
+  getTaskMessageTone,
   matchesTaskWorkspaceFilter,
   sortTasksForWorkspace,
   type TaskWorkspaceFilter
@@ -123,7 +126,6 @@ function TaskQueuePanel({
           <span>最近更新优先</span>
         </div>
       </header>
-
       <div className="task-table">
         <div className="task-table-head" aria-hidden="true">
           <span>任务</span>
@@ -179,7 +181,9 @@ function TaskQueuePanel({
 
               <div className="task-table-metric">
                 <strong>{formatBytes(task.speedBytes)}/s</strong>
-                <span>ETA {formatEtaSeconds(task.etaSeconds)}</span>
+                <span>
+                  ETA {formatEtaSeconds(task.etaSeconds)} · 做种 {formatSeedersCount(task.seedersCount)}
+                </span>
               </div>
 
               <div className="task-table-metric">
@@ -261,19 +265,14 @@ export function TaskSection({
           </div>
         </div>
       </header>
-
       {listErrorMessage ? <p className="feedback error">{listErrorMessage}</p> : null}
-
       {isLoadingTasks ? <div className="workspace-empty-state">正在加载任务列表...</div> : null}
-
       {!isLoadingTasks && tasks.length === 0 ? (
         <div className="workspace-empty-state">还没有任务。先粘贴一个 magnet 链接创建下载。</div>
       ) : null}
-
       {!isLoadingTasks && tasks.length > 0 ? (
         <div className="task-layout">
           <TaskFilterRail filter={filter} getFilterCount={getFilterCount} onFilterChange={setFilter} />
-
           <TaskQueuePanel
             currentFilter={filter}
             filteredTasks={filteredTasks}
@@ -359,6 +358,10 @@ export function TaskSection({
                   <article className="task-detail-stat">
                     <span>任务类型</span>
                     <strong>{selectedTask.type}</strong>
+                  </article>
+                  <article className="task-detail-stat">
+                    <span>做种数</span>
+                    <strong>{formatSeedersCount(selectedTask.seedersCount)}</strong>
                   </article>
                 </div>
 
@@ -474,18 +477,4 @@ function TaskFilterIcon({ filter }: { filter: TaskWorkspaceFilter }): React.JSX.
       />
     </svg>
   )
-}
-
-function formatCompactDate(value: string): string {
-  return new Date(value).toLocaleString('zh-CN', {
-    day: '2-digit',
-    hour: '2-digit',
-    hour12: false,
-    minute: '2-digit',
-    month: '2-digit'
-  })
-}
-
-function getTaskMessageTone(task: DownloadTask): 'error' | 'warning' {
-  return task.status === 'paused' ? 'warning' : 'error'
 }

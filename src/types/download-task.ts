@@ -39,6 +39,7 @@ export interface DownloadTask {
   speedBytes: number
   downloadedBytes: number
   totalBytes?: number
+  seedersCount?: number
   etaSeconds?: number
   errorMessage?: string
   createdAt: string

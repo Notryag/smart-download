@@ -31,6 +31,15 @@ function parseBytes(value: string | undefined): number {
   return Number.isFinite(parsed) ? Math.max(parsed, 0) : 0
 }
 
+function parseCount(value: string | undefined): number | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) ? Math.max(parsed, 0) : undefined
+}
+
 function parseEtaSeconds(
   totalBytes: number,
   downloadedBytes: number,
@@ -100,6 +109,7 @@ export function buildSnapshot(
     downloadedBytes,
     speedBytes,
     progress,
+    seedersCount: parseCount(result.numSeeders),
     etaSeconds: parseEtaSeconds(totalBytes, downloadedBytes, speedBytes),
     errorMessage: translateAria2ErrorMessage(result.errorMessage),
     updatedAt: toIsoNow()

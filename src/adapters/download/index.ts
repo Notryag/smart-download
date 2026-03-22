@@ -33,6 +33,7 @@ export interface DownloadTaskSnapshot {
   downloadedBytes: number
   speedBytes: number
   progress: number
+  seedersCount?: number
   etaSeconds?: number
   errorMessage?: string
   updatedAt: string

@@ -193,6 +193,8 @@ export class ManagedAria2Service {
       const runtimeDir = join(this.app.getPath('userData'), 'aria2')
       const downloadDir = join(this.app.getPath('downloads'), 'smart-download')
       const sessionPath = join(runtimeDir, 'session.txt')
+      const dhtPath = join(runtimeDir, 'dht.dat')
+      const dht6Path = join(runtimeDir, 'dht6.dat')
       const port = await allocatePort()
       const secret = createRpcSecret()
 
@@ -216,15 +218,20 @@ export class ManagedAria2Service {
       })
 
       const args = [
+        '--no-conf=true',
         '--enable-rpc=true',
         '--rpc-listen-all=false',
         `--rpc-listen-port=${port}`,
         `--rpc-secret=${secret}`,
         '--rpc-allow-origin-all=false',
+        '--enable-dht=true',
+        '--enable-peer-exchange=true',
         '--continue=true',
         '--max-concurrent-downloads=3',
         '--check-certificate=true',
         '--file-allocation=none',
+        `--dht-file-path=${dhtPath}`,
+        `--dht-file-path6=${dht6Path}`,
         '--save-session-interval=1',
         `--input-file=${sessionPath}`,
         `--save-session=${sessionPath}`,

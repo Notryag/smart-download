@@ -27,12 +27,14 @@ describe('aria2 utils', () => {
       status: 'active',
       totalLength: '0',
       completedLength: '0',
-      downloadSpeed: '0'
+      downloadSpeed: '0',
+      numSeeders: '0'
     })
 
     expect(snapshot.status).toBe('metadata')
     expect(snapshot.progress).toBe(0)
     expect(snapshot.speedBytes).toBe(0)
+    expect(snapshot.seedersCount).toBe(0)
     expect(snapshot.etaSeconds).toBeUndefined()
   })
 
@@ -42,7 +44,8 @@ describe('aria2 utils', () => {
       status: 'active',
       totalLength: '100',
       completedLength: '25',
-      downloadSpeed: '5'
+      downloadSpeed: '5',
+      numSeeders: '12'
     })
 
     expect(snapshot.status).toBe('downloading')
@@ -50,6 +53,7 @@ describe('aria2 utils', () => {
     expect(snapshot.downloadedBytes).toBe(25)
     expect(snapshot.progress).toBe(0.25)
     expect(snapshot.speedBytes).toBe(5)
+    expect(snapshot.seedersCount).toBe(12)
     expect(snapshot.etaSeconds).toBe(15)
   })
 

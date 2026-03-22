@@ -124,4 +124,19 @@ describe('ManagedAria2Service', () => {
     expect(nextSessionContent).toContain('gid=gid-old-2')
     expect(nextSessionContent).toContain('gid=gid-other')
   })
+
+  it('starts managed aria2 with isolated app-scoped config and dht state', async () => {
+    const service = new ManagedAria2Service(
+      createAppMock(userDataPath, downloadsPath) as never,
+      new InMemoryLogger()
+    )
+
+    await service.start(null)
+
+    const [, args] = childProcessMocks.spawn.mock.calls[0] ?? []
+
+    expect(args).toContain('--no-conf=true')
+    expect(args).toContain(`--dht-file-path=${join(userDataPath, 'aria2', 'dht.dat')}`)
+    expect(args).toContain(`--dht-file-path6=${join(userDataPath, 'aria2', 'dht6.dat')}`)
+  })
 })
