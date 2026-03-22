@@ -1,0 +1,6 @@
+#!/bin/sh
+
+set -eu
+
+echo "Running pre-commit verification: lint + typecheck + test"
+npm run verify

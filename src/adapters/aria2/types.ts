@@ -11,6 +11,7 @@ export interface Aria2TellStatusResult {
   downloadSpeed: string
   followedBy?: string[]
   belongsTo?: string
+  infoHash?: string
   errorCode?: string
   errorMessage?: string
   dir?: string

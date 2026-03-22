@@ -55,6 +55,8 @@
 - [x] 补充 main IPC 仪表盘推送行为单元测试
 - [x] 输出桌面下载工具化 UI 改造文档
 - [x] 修复 aria2 magnet 元数据任务切换真实下载 GID 后的大小同步错误
+- [x] 更新 AI 接手文档，明确核心链路优先按 TDD 执行
+- [x] 配置提交前自动执行 verify（lint + typecheck + test）
 
 ## Current priority: UI 工具化改造
 

@@ -49,7 +49,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('Aria2DownloadAdapter', () => {
+describe('Aria2DownloadAdapter runtime', () => {
   it('reports runtime as unavailable when BitTorrent is not enabled', async () => {
     mockFetchSequence({
       body: {
@@ -67,7 +67,9 @@ describe('Aria2DownloadAdapter', () => {
     expect(status.client).toBe('aria2')
     expect(status.message).toContain('未启用 BitTorrent')
   })
+})
 
+describe('Aria2DownloadAdapter attach flow', () => {
   it('attaches a task through aria2 RPC and returns the first snapshot', async () => {
     const fetchMock = mockFetchSequence(
       {
@@ -127,6 +129,109 @@ describe('Aria2DownloadAdapter', () => {
     expect(tellStatusRequest.params).toEqual(['token:rpc-secret', 'gid-1'])
   })
 
+  it('retries task attach after cleaning stale registered magnet downloads', async () => {
+    const fetchMock = mockFetchSequence(
+      {
+        body: {
+          error: {
+            code: 1,
+            message: 'The download is already registered.'
+          }
+        }
+      },
+      {
+        body: {
+          result: [
+            {
+              gid: 'gid-old-active',
+              status: 'active',
+              infoHash: '1234567890123456789012345678901234567890'
+            }
+          ]
+        }
+      },
+      {
+        body: {
+          result: []
+        }
+      },
+      {
+        body: {
+          result: [
+            {
+              gid: 'gid-old-stopped',
+              status: 'complete',
+              infoHash: '1234567890123456789012345678901234567890'
+            }
+          ]
+        }
+      },
+      {
+        body: {
+          result: 'OK'
+        }
+      },
+      {
+        body: {
+          result: 'OK'
+        }
+      },
+      {
+        body: {
+          result: 'OK'
+        }
+      },
+      {
+        body: {
+          result: 'gid-new'
+        }
+      },
+      {
+        body: {
+          result: {
+            gid: 'gid-new',
+            status: 'active',
+            totalLength: '100',
+            completedLength: '10',
+            downloadSpeed: '5'
+          }
+        }
+      }
+    )
+
+    const adapter = new Aria2DownloadAdapter({
+      rpcUrl: 'http://127.0.0.1:6800/jsonrpc',
+      secret: 'rpc-secret'
+    })
+
+    const session = await adapter.attachTask({
+      taskId: 'task-1',
+      source: 'magnet:?xt=urn:btih:1234567890123456789012345678901234567890',
+      savePath: 'D:\\Downloads'
+    })
+
+    expect(session.remoteId).toBe('gid-new')
+
+    const requestMethods = fetchMock.mock.calls.map((call) => {
+      const request = JSON.parse(String(call?.[1]?.body)) as { method: string }
+      return request.method
+    })
+
+    expect(requestMethods).toEqual([
+      'aria2.addUri',
+      'aria2.tellActive',
+      'aria2.tellWaiting',
+      'aria2.tellStopped',
+      'aria2.forceRemove',
+      'aria2.removeDownloadResult',
+      'aria2.removeDownloadResult',
+      'aria2.addUri',
+      'aria2.tellStatus'
+    ])
+  })
+})
+
+describe('Aria2DownloadAdapter snapshot and cleanup flow', () => {
   it('starts a hydrated task by unpausing and waiting for an active snapshot', async () => {
     mockFetchSequence(
       {
@@ -195,6 +300,105 @@ describe('Aria2DownloadAdapter', () => {
     expect(snapshot.downloadedBytes).toBe(5702520832)
   })
 
+  it('cleans up related aria2 downloads with the same info hash when deleting a task', async () => {
+    const fetchMock = mockFetchSequence(
+      {
+        body: {
+          result: 'OK'
+        }
+      },
+      {
+        body: {
+          result: 'OK'
+        }
+      },
+      {
+        body: {
+          result: []
+        }
+      },
+      {
+        body: {
+          result: []
+        }
+      },
+      {
+        body: {
+          result: [
+            {
+              gid: 'gid-old-stopped',
+              status: 'complete',
+              infoHash: '1234567890123456789012345678901234567890'
+            }
+          ]
+        }
+      },
+      {
+        body: {
+          result: 'OK'
+        }
+      }
+    )
+
+    const adapter = new Aria2DownloadAdapter({
+      rpcUrl: 'http://127.0.0.1:6800/jsonrpc',
+      secret: 'rpc-secret'
+    })
+    await adapter.hydrateTask(createPersistedTask())
+
+    await adapter.deleteTask({ taskId: 'task-1' })
+
+    const requestMethods = fetchMock.mock.calls.map((call) => {
+      const request = JSON.parse(String(call?.[1]?.body)) as { method: string, params: unknown[] }
+      return {
+        method: request.method,
+        params: request.params
+      }
+    })
+
+    expect(requestMethods).toEqual([
+      {
+        method: 'aria2.forceRemove',
+        params: ['token:rpc-secret', 'gid-1']
+      },
+      {
+        method: 'aria2.removeDownloadResult',
+        params: ['token:rpc-secret', 'gid-1']
+      },
+      {
+        method: 'aria2.tellActive',
+        params: [
+          'token:rpc-secret',
+          ['gid', 'status', 'infoHash']
+        ]
+      },
+      {
+        method: 'aria2.tellWaiting',
+        params: [
+          'token:rpc-secret',
+          0,
+          1000,
+          ['gid', 'status', 'infoHash']
+        ]
+      },
+      {
+        method: 'aria2.tellStopped',
+        params: [
+          'token:rpc-secret',
+          0,
+          1000,
+          ['gid', 'status', 'infoHash']
+        ]
+      },
+      {
+        method: 'aria2.removeDownloadResult',
+        params: ['token:rpc-secret', 'gid-old-stopped']
+      }
+    ])
+  })
+})
+
+describe('Aria2DownloadAdapter delete flow', () => {
   it('ignores completed and missing-result errors when deleting a task', async () => {
     mockFetchSequence(
       {
@@ -211,6 +415,21 @@ describe('Aria2DownloadAdapter', () => {
             code: 2,
             message: 'Invalid GID'
           }
+        }
+      },
+      {
+        body: {
+          result: []
+        }
+      },
+      {
+        body: {
+          result: []
+        }
+      },
+      {
+        body: {
+          result: []
         }
       }
     )

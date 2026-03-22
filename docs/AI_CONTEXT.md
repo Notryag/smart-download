@@ -36,9 +36,11 @@
 - 一次只完成当前阶段最优先的一个任务
 - 小步修改，不做大重构
 - 不改无关文件
+- 核心逻辑优先按 TDD 思路推进：先写失败测试，再补实现，再回归验证
 - 完成后更新 `TASKS.md`
 - 仅在脚本已存在时运行 `lint / typecheck / test`
 - 下载逻辑留在 `main / core / adapter`
+- 提交前校验优先交给仓库自动 hook，不依赖 AI 记忆
 
 ## Recommended Task Flow
 
@@ -46,10 +48,16 @@
 
 1. 先确认任务是否属于当前阶段
 2. 阅读相关模块和决策文档
-3. 直接做最小改动
-4. 补必要测试
-5. 更新 `TASKS.md`
-6. 运行验证脚本
+3. 先补一个能描述目标行为或回归问题的失败测试
+4. 再做最小实现，让测试通过
+5. 补必要测试覆盖边界条件
+6. 更新 `TASKS.md`
+7. 运行验证脚本
+
+说明：
+
+- 对 `core / main / adapter / task-manager / 状态映射 / 错误处理` 这类核心链路，默认按 TDD 执行
+- 对纯样式调整、布局微调这类 UI 改动，不强制先写测试，但如果修复了明确交互回归，仍应补回归测试
 
 ### If asked for architecture review
 
@@ -83,6 +91,8 @@
   内置 aria2 托管
 - `src/core/task-manager/index.test.ts`
   当前最重要的行为测试
+- `src/adapters/aria2/index.test.ts`
+  aria2 主链路和回归测试入口
 
 ## Known Documentation Status
 
@@ -103,6 +113,7 @@
 要求：
 - 小步修改
 - 不改无关文件
+- 核心逻辑按 TDD：先写失败测试，再补实现
 - 需要时补测试
 - 完成后更新 TASKS.md
 - 运行现有 lint / typecheck / test

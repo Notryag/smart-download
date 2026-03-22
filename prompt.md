@@ -7,9 +7,11 @@
 - 小步修改
 - 不改无关文件
 - 不引入不必要的新依赖
+- 核心逻辑优先按 TDD：先写失败测试，再补实现，再运行验证
 - renderer 只做 UI，下载逻辑放 main / core / adapter
 - 完成后更新 TASKS.md
 - 仅在项目已存在对应脚本时运行 lint / typecheck / test
+- 提交前默认依赖仓库 hook 执行 verify，不要靠人工记忆
 - 最后总结修改内容
 
 # 新功能

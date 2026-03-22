@@ -26,6 +26,9 @@ interface AdapterLogger {
   error(message: string, context?: LogContext | string): void
 }
 
+const ARIA2_STATUS_QUERY_KEYS = ['gid', 'status', 'infoHash'] as const
+const ARIA2_SCAN_LIMIT = 1000
+
 export class Aria2RpcClient {
   constructor(private readonly config: Aria2ClientConfig) {}
 
@@ -39,6 +42,26 @@ export class Aria2RpcClient {
 
   async tellStatus(gid: string): Promise<Aria2TellStatusResult> {
     return this.request('aria2.tellStatus', [gid])
+  }
+
+  async tellActive(keys: readonly string[] = ARIA2_STATUS_QUERY_KEYS): Promise<Aria2TellStatusResult[]> {
+    return this.request('aria2.tellActive', [keys])
+  }
+
+  async tellWaiting(
+    offset: number,
+    num: number,
+    keys: readonly string[] = ARIA2_STATUS_QUERY_KEYS
+  ): Promise<Aria2TellStatusResult[]> {
+    return this.request('aria2.tellWaiting', [offset, num, keys])
+  }
+
+  async tellStopped(
+    offset: number,
+    num: number,
+    keys: readonly string[] = ARIA2_STATUS_QUERY_KEYS
+  ): Promise<Aria2TellStatusResult[]> {
+    return this.request('aria2.tellStopped', [offset, num, keys])
   }
 
   async pause(gid: string): Promise<string> {
@@ -170,10 +193,33 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       },
       taskId: input.taskId
     })
-    const gid = await client.addUri([input.source.trim()], {
-      dir: input.savePath.trim(),
-      pause: 'true'
-    })
+    let gid: string
+
+    try {
+      gid = await client.addUri([input.source.trim()], {
+        dir: input.savePath.trim(),
+        pause: 'true'
+      })
+    } catch (error) {
+      const message = getErrorMessage(error, 'aria2 创建任务失败')
+
+      if (!message.includes('already registered')) {
+        throw error
+      }
+
+      this.logger?.warning('aria2 reported duplicate registered magnet; cleaning stale entries', {
+        category: 'aria2-adapter',
+        details: {
+          sourcePreview: buildSourcePreview(input.source)
+        },
+        taskId: input.taskId
+      })
+      await this.cleanupRelatedTasksBySource(input.source)
+      gid = await client.addUri([input.source.trim()], {
+        dir: input.savePath.trim(),
+        pause: 'true'
+      })
+    }
 
     const session = this.sessionStore.createSession({
       taskId: input.taskId,
@@ -316,6 +362,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     }
 
     this.sessionStore.deleteSession(input.taskId)
+    await this.cleanupRelatedTasksBySource(session.source, new Set([session.gid]))
   }
 
   private getClientOrThrow(): Aria2RpcClient {
@@ -359,6 +406,56 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     }
 
     throw new Error('aria2 followed download chain is deeper than expected')
+  }
+
+  private async cleanupRelatedTasksBySource(
+    source: string,
+    ignoredGids: Set<string> = new Set()
+  ): Promise<void> {
+    const client = this.getClientOrThrow()
+    const infoHash = extractMagnetInfoHash(source)
+
+    if (!infoHash) {
+      return
+    }
+
+    const [active, waiting, stopped] = await Promise.all([
+      client.tellActive(),
+      client.tellWaiting(0, ARIA2_SCAN_LIMIT),
+      client.tellStopped(0, ARIA2_SCAN_LIMIT)
+    ])
+
+    const relatedTasks = [...active, ...waiting, ...stopped].filter((task) => {
+      if (ignoredGids.has(task.gid)) {
+        return false
+      }
+
+      return normalizeInfoHash(task.infoHash) === infoHash
+    })
+
+    for (const task of relatedTasks) {
+      if (['active', 'waiting', 'paused'].includes(task.status)) {
+        try {
+          await client.remove(task.gid)
+        } catch (error) {
+          const message = getErrorMessage(error, 'aria2 删除关联任务失败')
+
+          if (!message.includes('Download already completed') && !message.includes('Invalid GID')) {
+            throw error
+          }
+        }
+      }
+
+      try {
+        await client.removeDownloadResult(task.gid)
+      } catch (error) {
+        const message = getErrorMessage(error, 'aria2 清理关联任务结果失败')
+
+        if (!message.includes('Invalid GID')) {
+          throw error
+        }
+      }
+    }
   }
 
   private maybeLogSnapshot(result: Aria2TellStatusResult, snapshot: DownloadTaskSnapshot): void {
@@ -410,6 +507,16 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
 
     this.lastZeroSpeedLogAt.delete(snapshot.taskId)
   }
+}
+
+function extractMagnetInfoHash(source: string): string | null {
+  const match = source.match(/xt=urn:btih:([^&]+)/i)
+  return normalizeInfoHash(match?.[1])
+}
+
+function normalizeInfoHash(value: string | undefined): string | null {
+  const normalized = value?.trim().toLowerCase()
+  return normalized ? normalized : null
 }
 
 export type { Aria2ClientConfig, Aria2TellStatusResult } from './types'
