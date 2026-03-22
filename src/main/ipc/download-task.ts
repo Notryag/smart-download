@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, type WebContents } from 'electron'
+import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions, type WebContents } from 'electron'
 import type { BasicDiagnosticsService, InMemoryTaskManager } from '../../core'
 import {
   DOWNLOAD_TASK_IPC_CHANNELS,
@@ -60,6 +60,18 @@ export function registerDownloadTaskIpc(
       return { taskId: task.id }
     }
   )
+
+  ipcMain.handle(DOWNLOAD_TASK_IPC_CHANNELS.pickDirectory, async (event) => {
+    const browserWindow = BrowserWindow.fromWebContents(event.sender)
+    const options: OpenDialogOptions = {
+      properties: ['openDirectory', 'createDirectory']
+    }
+    const result = browserWindow
+      ? await dialog.showOpenDialog(browserWindow, options)
+      : await dialog.showOpenDialog(options)
+
+    return result.canceled ? null : result.filePaths[0] ?? null
+  })
 
   ipcMain.handle(DOWNLOAD_TASK_IPC_CHANNELS.getDashboard, async () => {
     return buildDashboardSnapshot()

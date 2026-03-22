@@ -5,9 +5,11 @@ interface NewTaskModalProps {
   errorMessage: string
   form: CreateDownloadTaskInput
   isOpen: boolean
+  isPickingSavePath: boolean
   isSubmitting: boolean
   onClose: () => void
   onFieldChange: (key: keyof CreateDownloadTaskInput, value: string) => void
+  onPickSavePath: () => Promise<void>
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
 }
 
@@ -15,9 +17,11 @@ export function NewTaskModal({
   errorMessage,
   form,
   isOpen,
+  isPickingSavePath,
   isSubmitting,
   onClose,
   onFieldChange,
+  onPickSavePath,
   onSubmit
 }: NewTaskModalProps): React.JSX.Element | null {
   if (!isOpen) {
@@ -63,13 +67,23 @@ export function NewTaskModal({
 
           <label className="field">
             <span>保存目录</span>
-            <input
-              placeholder="D:\\Downloads"
-              type="text"
-              value={form.savePath}
-              onChange={(event) => onFieldChange('savePath', event.target.value)}
-            />
-            <small className="field-hint">请输入本地下载目录，例如 `D:\Downloads`。</small>
+            <div className="path-picker-field">
+              <input
+                placeholder="请选择保存目录"
+                readOnly
+                type="text"
+                value={form.savePath}
+              />
+              <button
+                className="ghost-button"
+                disabled={isPickingSavePath || isSubmitting}
+                type="button"
+                onClick={() => void onPickSavePath()}
+              >
+                {isPickingSavePath ? '选择中...' : '选择目录'}
+              </button>
+            </div>
+            <small className="field-hint">使用系统目录选择器设置保存路径。</small>
           </label>
 
           <label className="field">

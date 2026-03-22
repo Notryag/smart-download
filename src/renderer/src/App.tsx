@@ -23,6 +23,7 @@ const DEFAULT_FORM: CreateDownloadTaskInput = {
 function App(): React.JSX.Element {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isPickingSavePath, setIsPickingSavePath] = useState(false)
   const [isLoadingTasks, setIsLoadingTasks] = useState(true)
   const [actionTaskId, setActionTaskId] = useState<string | null>(null)
   const [tasks, setTasks] = useState<DownloadTask[]>([])
@@ -94,6 +95,23 @@ function App(): React.JSX.Element {
       ...current,
       [key]: value
     }))
+  }
+
+  async function handlePickSavePath(): Promise<void> {
+    setIsPickingSavePath(true)
+
+    try {
+      const selectedPath = await window.api.pickDirectory()
+
+      if (selectedPath) {
+        updateField('savePath', selectedPath)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '选择保存目录失败'
+      setErrorMessage(message)
+    } finally {
+      setIsPickingSavePath(false)
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -207,9 +225,11 @@ function App(): React.JSX.Element {
         errorMessage={errorMessage}
         form={form}
         isOpen={isModalOpen}
+        isPickingSavePath={isPickingSavePath}
         isSubmitting={isSubmitting}
         onClose={closeModal}
         onFieldChange={updateField}
+        onPickSavePath={handlePickSavePath}
         onSubmit={handleSubmit}
       />
     </>

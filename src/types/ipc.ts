@@ -3,6 +3,7 @@ import type { CreateDownloadTaskInput, DownloadTask } from './download-task'
 
 export const DOWNLOAD_TASK_IPC_CHANNELS = {
   createTask: 'download-task:create',
+  pickDirectory: 'download-task:pick-directory',
   getDashboard: 'download-task:dashboard',
   dashboardUpdated: 'download-task:dashboard-updated',
   listTasks: 'download-task:list',
@@ -31,6 +32,7 @@ export interface TaskIdInput {
 
 export interface DownloadTaskApi {
   createTask(input: CreateDownloadTaskInput): Promise<CreateTaskResult>
+  pickDirectory(): Promise<string | null>
   getDashboard(): Promise<DownloadDashboardSnapshot>
   onDashboardUpdated(listener: (snapshot: DownloadDashboardSnapshot) => void): () => void
   listTasks(): Promise<DownloadTask[]>

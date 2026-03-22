@@ -393,6 +393,11 @@ button {
   color: var(--color-danger);
 }
 
+.feedback.warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
 .header-feedback {
   align-self: flex-start;
 }
@@ -584,11 +589,19 @@ button {
 
 .task-primary-cell p,
 .task-table-metric span,
-.task-inline-error {
+.task-inline-message {
   margin-top: 4px;
   font-size: 12px;
   line-height: 1.5;
   word-break: break-all;
+}
+
+.task-inline-error {
+  color: var(--color-danger);
+}
+
+.task-inline-warning {
+  color: var(--color-warning);
 }
 
 .task-status-cell {
@@ -942,6 +955,15 @@ button {
   box-shadow: 0 0 0 4px rgba(65, 183, 231, 0.12);
 }
 
+.path-picker-field {
+  display: flex;
+  gap: 10px;
+}
+
+.path-picker-field input {
+  flex: 1;
+}
+
 .form-actions {
   justify-content: flex-end;
 }
@@ -1043,6 +1065,10 @@ button {
   .form-actions .primary-button,
   .form-actions .ghost-button {
     width: 100%;
+  }
+
+  .path-picker-field {
+    flex-direction: column;
   }
 
   .task-filter-list {

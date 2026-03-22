@@ -152,7 +152,11 @@ function TaskQueuePanel({
               <div className="task-primary-cell">
                 <strong>{task.name}</strong>
                 <p>{task.savePath}</p>
-                {task.errorMessage ? <span className="task-inline-error">{task.errorMessage}</span> : null}
+                {task.errorMessage ? (
+                  <span className={`task-inline-message task-inline-${getTaskMessageTone(task)}`}>
+                    {task.errorMessage}
+                  </span>
+                ) : null}
               </div>
 
               <div className="task-status-cell">
@@ -293,7 +297,11 @@ export function TaskSection({
             {selectedTask ? (
               <>
                 {selectedTask.errorMessage ? (
-                  <p className="feedback error task-detail-alert">{selectedTask.errorMessage}</p>
+                  <p
+                    className={`feedback ${getTaskMessageTone(selectedTask)} task-detail-alert`}
+                  >
+                    {selectedTask.errorMessage}
+                  </p>
                 ) : null}
 
                 <div className="task-detail-hero">
@@ -476,4 +484,8 @@ function formatCompactDate(value: string): string {
     minute: '2-digit',
     month: '2-digit'
   })
+}
+
+function getTaskMessageTone(task: DownloadTask): 'error' | 'warning' {
+  return task.status === 'paused' ? 'warning' : 'error'
 }

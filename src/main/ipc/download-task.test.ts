@@ -18,7 +18,11 @@ const electronMocks = vi.hoisted(() => {
       handlers.set(channel, handler)
     })
   }
+  const dialog = {
+    showOpenDialog: vi.fn()
+  }
   const BrowserWindow = {
+    fromWebContents: vi.fn(),
     getAllWindows: vi.fn(() => windows)
   }
 
@@ -26,12 +30,14 @@ const electronMocks = vi.hoisted(() => {
     handlers,
     windows,
     ipcMain,
+    dialog,
     BrowserWindow
   }
 })
 
 vi.mock('electron', () => ({
   BrowserWindow: electronMocks.BrowserWindow,
+  dialog: electronMocks.dialog,
   ipcMain: electronMocks.ipcMain
 }))
 
@@ -147,6 +153,8 @@ describe('registerDownloadTaskIpc', () => {
     electronMocks.handlers.clear()
     electronMocks.windows.length = 0
     electronMocks.ipcMain.handle.mockClear()
+    electronMocks.dialog.showOpenDialog.mockReset()
+    electronMocks.BrowserWindow.fromWebContents.mockReset()
     electronMocks.BrowserWindow.getAllWindows.mockClear()
 
     vi.spyOn(globalThis, 'setInterval').mockImplementation((handler: TimerHandler) => {
@@ -211,6 +219,33 @@ describe('registerDownloadTaskIpc', () => {
     })
     expect(harness.taskManager.listTasks).toHaveBeenCalledOnce()
     expect(harness.diagnosticsService.getSummary).toHaveBeenCalledWith(harness.taskList, [])
+  })
+
+  it('opens a directory picker and returns the selected path', async () => {
+    const harness = createHarness()
+    const browserWindow = createWindow()
+    electronMocks.BrowserWindow.fromWebContents.mockReturnValue(browserWindow)
+    electronMocks.dialog.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: ['D:\\Downloads']
+    })
+
+    registerDownloadTaskIpc(
+      harness.taskManager as never,
+      harness.diagnosticsService as never,
+      harness.listLogs
+    )
+
+    const pickDirectory = getHandler(DOWNLOAD_TASK_IPC_CHANNELS.pickDirectory)
+    const result = await pickDirectory({
+      sender: browserWindow.webContents
+    })
+
+    expect(result).toBe('D:\\Downloads')
+    expect(electronMocks.BrowserWindow.fromWebContents).toHaveBeenCalledWith(browserWindow.webContents)
+    expect(electronMocks.dialog.showOpenDialog).toHaveBeenCalledWith(browserWindow, {
+      properties: ['openDirectory', 'createDirectory']
+    })
   })
 
   it.each([

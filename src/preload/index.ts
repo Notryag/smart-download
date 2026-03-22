@@ -6,6 +6,9 @@ const api: DownloadTaskApi = {
   createTask(input) {
     return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.createTask, input)
   },
+  pickDirectory() {
+    return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.pickDirectory)
+  },
   getDashboard() {
     return ipcRenderer.invoke(DOWNLOAD_TASK_IPC_CHANNELS.getDashboard)
   },
