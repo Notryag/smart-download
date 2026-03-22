@@ -44,6 +44,18 @@ function createPersistedTask(patch: Partial<DownloadTask> = {}): DownloadTask {
   }
 }
 
+function createLoggerMock(): {
+  info: ReturnType<typeof vi.fn>
+  warning: ReturnType<typeof vi.fn>
+  error: ReturnType<typeof vi.fn>
+} {
+  return {
+    info: vi.fn(),
+    warning: vi.fn(),
+    error: vi.fn()
+  }
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -350,5 +362,72 @@ describe('Aria2DownloadAdapter delete flow', () => {
       'aria2.tellStopped',
       'aria2.removeDownloadResult'
     ])
+  })
+
+  it('keeps delete successful when related task cleanup RPC fails after primary removal', async () => {
+    const fetchMock = mockFetchSequence(
+      {
+        body: {
+          result: 'OK'
+        }
+      },
+      {
+        body: {
+          result: 'OK'
+        }
+      },
+      {
+        body: {
+          result: []
+        },
+        status: 503
+      },
+      {
+        body: {
+          result: []
+        }
+      },
+      {
+        body: {
+          result: []
+        }
+      }
+    )
+    const logger = createLoggerMock()
+    const adapter = new Aria2DownloadAdapter(
+      { rpcUrl: 'http://127.0.0.1:6800/jsonrpc' },
+      '未配置 aria2 RPC。',
+      logger
+    )
+    await adapter.hydrateTask(createPersistedTask())
+
+    await expect(adapter.deleteTask({ taskId: 'task-1' })).resolves.toBeUndefined()
+    await expect(adapter.getTaskSnapshot({ taskId: 'task-1' })).rejects.toThrow(
+      'Download session not found for task: task-1'
+    )
+
+    const requestMethods = fetchMock.mock.calls.map((call) => {
+      const request = JSON.parse(String(call?.[1]?.body)) as { method: string }
+      return request.method
+    })
+
+    expect(requestMethods).toEqual([
+      'aria2.forceRemove',
+      'aria2.removeDownloadResult',
+      'aria2.tellActive',
+      'aria2.tellWaiting',
+      'aria2.tellStopped'
+    ])
+    expect(logger.warning).toHaveBeenCalledWith(
+      'Failed to cleanup related aria2 tasks after deleting primary task',
+      expect.objectContaining({
+        category: 'aria2-adapter',
+        taskId: 'task-1',
+        details: expect.objectContaining({
+          errorMessage: 'aria2 RPC 请求失败 (503)',
+          gid: 'gid-1'
+        })
+      })
+    )
   })
 })

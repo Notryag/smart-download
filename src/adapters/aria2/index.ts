@@ -6,16 +6,12 @@ import type {
 } from '../download'
 import type { DownloadTask, TaskIdInput } from '../../types'
 import type { LogContext } from '../../core'
-import type {
-  Aria2ClientConfig,
-  Aria2RpcResponse,
-  Aria2TellStatusResult,
-  Aria2UriResult
-} from './types'
+import type { Aria2ClientConfig, Aria2TellStatusResult } from './types'
 import { Aria2RuntimeSessionStore } from './runtime-session-store'
 import { filterRelatedTasksBySource } from './source-match'
 import { attachUriWithDuplicateCleanup } from './attach-with-cleanup'
 import { Aria2StateWaiter } from './state-waiter'
+import { Aria2RpcClient } from './rpc-client'
 import {
   ARIA2_DIAGNOSTIC_LOG_INTERVAL_MS,
   assertSource,
@@ -35,89 +31,7 @@ interface AdapterLogger {
   error(message: string, context?: LogContext | string): void
 }
 
-const ARIA2_STATUS_QUERY_KEYS = ['gid', 'status', 'infoHash'] as const
 const ARIA2_SCAN_LIMIT = 1000
-
-export class Aria2RpcClient {
-  constructor(private readonly config: Aria2ClientConfig) {}
-  async getVersion(): Promise<{ version: string; enabledFeatures: string[] }> {
-    return this.request('aria2.getVersion', [])
-  }
-  async addUri(uris: string[], options: Record<string, string> = {}): Promise<string> {
-    return this.request('aria2.addUri', [uris, options])
-  }
-  async tellStatus(gid: string): Promise<Aria2TellStatusResult> {
-    return this.request('aria2.tellStatus', [gid])
-  }
-  async getUris(gid: string): Promise<Aria2UriResult[]> {
-    return this.request('aria2.getUris', [gid])
-  }
-  async tellActive(keys: readonly string[] = ARIA2_STATUS_QUERY_KEYS): Promise<Aria2TellStatusResult[]> {
-    return this.request('aria2.tellActive', [keys])
-  }
-  async tellWaiting(
-    offset: number,
-    num: number,
-    keys: readonly string[] = ARIA2_STATUS_QUERY_KEYS
-  ): Promise<Aria2TellStatusResult[]> {
-    return this.request('aria2.tellWaiting', [offset, num, keys])
-  }
-
-  async tellStopped(
-    offset: number,
-    num: number,
-    keys: readonly string[] = ARIA2_STATUS_QUERY_KEYS
-  ): Promise<Aria2TellStatusResult[]> {
-    return this.request('aria2.tellStopped', [offset, num, keys])
-  }
-
-  async pause(gid: string): Promise<string> {
-    return this.request('aria2.forcePause', [gid])
-  }
-
-  async unpause(gid: string): Promise<string> {
-    return this.request('aria2.unpause', [gid])
-  }
-
-  async remove(gid: string): Promise<string> {
-    return this.request('aria2.forceRemove', [gid])
-  }
-
-  async removeDownloadResult(gid: string): Promise<string> {
-    return this.request('aria2.removeDownloadResult', [gid])
-  }
-  private async request<T>(method: string, params: unknown[]): Promise<T> {
-    const payload = {
-      jsonrpc: '2.0',
-      id: crypto.randomUUID(),
-      method,
-      params: this.config.secret ? [`token:${this.config.secret}`, ...params] : params
-    }
-
-    const response = await fetch(this.config.rpcUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    })
-    const json = (await response.json()) as Aria2RpcResponse<T>
-
-    if (json.error) {
-      throw new Error(`aria2 RPC 错误 (${json.error.code}): ${json.error.message}`)
-    }
-
-    if (!response.ok) {
-      throw new Error(`aria2 RPC 请求失败 (${response.status})`)
-    }
-
-    if (json.result === undefined) {
-      throw new Error('aria2 RPC 未返回 result')
-    }
-
-    return json.result
-  }
-}
 
 export class Aria2DownloadAdapter implements DownloadAdapter {
   private readonly client: Aria2RpcClient | null
@@ -146,10 +60,8 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
         message: this.unavailableMessage
       }
     }
-
     try {
       const version = await this.client.getVersion()
-
       if (!version.enabledFeatures.includes('BitTorrent')) {
         return {
           ready: false,
@@ -242,7 +154,6 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
 
   async hydrateTask(task: DownloadTask): Promise<DownloadAdapterSession> {
     assertSource(task.source)
-
     const now = toIsoNow()
     const session = this.sessionStore.hydrateTask(task, now)
     this.logger?.info('Hydrated aria2 runtime session from persisted task', {
@@ -277,7 +188,6 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     const { result, snapshot } = await this.readSnapshotWithFollowedTasks(input.taskId)
     this.maybeLogSnapshot(result, snapshot)
     this.sessionStore.touchSession(input.taskId, snapshot.updatedAt)
-
     return snapshot
   }
 
@@ -348,7 +258,19 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     }
 
     this.sessionStore.deleteSession(input.taskId)
-    await this.cleanupRelatedTasksBySource(session.source, new Set([session.gid]))
+    try {
+      await this.cleanupRelatedTasksBySource(session.source, new Set([session.gid]))
+    } catch (error) {
+      this.logger?.warning('Failed to cleanup related aria2 tasks after deleting primary task', {
+        category: 'aria2-adapter',
+        details: {
+          errorMessage: getErrorMessage(error, 'aria2 清理关联任务失败'),
+          gid: session.gid,
+          sourcePreview: buildSourcePreview(session.source)
+        },
+        taskId: input.taskId
+      })
+    }
   }
 
   private getClientOrThrow(): Aria2RpcClient {
@@ -370,7 +292,6 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     while (depth < Aria2DownloadAdapter.FOLLOWED_TASK_MAX_DEPTH) {
       const result = await client.tellStatus(session.gid)
       const followedGid = result.followedBy?.[0]
-
       if (!followedGid || followedGid === session.gid) {
         return {
           result,
@@ -503,4 +424,5 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
   }
 }
 
+export { Aria2RpcClient } from './rpc-client'
 export type { Aria2ClientConfig, Aria2TellStatusResult } from './types'

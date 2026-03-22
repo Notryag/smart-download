@@ -1,5 +1,5 @@
 import { buildSourcePreview, getErrorMessage } from './utils'
-import type { Aria2RpcClient } from './index'
+import type { Aria2RpcClient } from './rpc-client'
 
 const ARIA2_DUPLICATE_ATTACH_RETRY_LIMIT = 3
 
