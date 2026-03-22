@@ -9,6 +9,8 @@ export interface Aria2TellStatusResult {
   totalLength: string
   completedLength: string
   downloadSpeed: string
+  followedBy?: string[]
+  belongsTo?: string
   errorCode?: string
   errorMessage?: string
   dir?: string

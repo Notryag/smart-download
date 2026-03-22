@@ -157,6 +157,44 @@ describe('Aria2DownloadAdapter', () => {
     expect(snapshot.etaSeconds).toBe(15)
   })
 
+  it('follows aria2 metadata handoff to the real download gid', async () => {
+    mockFetchSequence(
+      {
+        body: {
+          result: {
+            gid: 'gid-meta',
+            status: 'complete',
+            totalLength: '435179',
+            completedLength: '435179',
+            downloadSpeed: '0',
+            followedBy: ['gid-real']
+          }
+        }
+      },
+      {
+        body: {
+          result: {
+            gid: 'gid-real',
+            status: 'complete',
+            totalLength: '5702520832',
+            completedLength: '5702520832',
+            downloadSpeed: '0'
+          }
+        }
+      }
+    )
+
+    const adapter = new Aria2DownloadAdapter({ rpcUrl: 'http://127.0.0.1:6800/jsonrpc' })
+    await adapter.hydrateTask(createPersistedTask({ remoteId: 'gid-meta' }))
+
+    const snapshot = await adapter.getTaskSnapshot({ taskId: 'task-1' })
+
+    expect(snapshot.remoteId).toBe('gid-real')
+    expect(snapshot.status).toBe('completed')
+    expect(snapshot.totalBytes).toBe(5702520832)
+    expect(snapshot.downloadedBytes).toBe(5702520832)
+  })
+
   it('ignores completed and missing-result errors when deleting a task', async () => {
     mockFetchSequence(
       {

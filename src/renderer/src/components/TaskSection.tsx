@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 import type { DownloadTask } from '../../../types'
 import {
   canPauseTask,
@@ -6,10 +8,58 @@ import {
   formatDate,
   formatEtaSeconds,
   formatProgress,
-  formatStatus
+  formatStatus,
+  matchesTaskWorkspaceFilter,
+  sortTasksForWorkspace,
+  type TaskWorkspaceFilter
 } from '../utils/download-task'
 
 export type TaskAction = 'pause' | 'resume' | 'delete'
+
+const FILTER_ITEMS: Array<{
+  id: TaskWorkspaceFilter
+  label: string
+  description: string
+}> = [
+  {
+    id: 'all',
+    label: '全部',
+    description: '查看所有任务'
+  },
+  {
+    id: 'active',
+    label: '下载中',
+    description: '待获取元数据和下载中的任务'
+  },
+  {
+    id: 'paused',
+    label: '已暂停',
+    description: '等待继续或删除'
+  },
+  {
+    id: 'completed',
+    label: '已完成',
+    description: '已完成的下载'
+  },
+  {
+    id: 'failed',
+    label: '失败',
+    description: '优先处理失败原因'
+  }
+]
+
+interface TaskFilterRailProps {
+  filter: TaskWorkspaceFilter
+  onFilterChange: (filter: TaskWorkspaceFilter) => void
+  getFilterCount: (filter: TaskWorkspaceFilter) => number
+}
+
+interface TaskQueuePanelProps {
+  currentFilter: TaskWorkspaceFilter
+  filteredTasks: DownloadTask[]
+  selectedTaskId: string | null
+  onSelectTask: (taskId: string) => void
+}
 
 interface TaskSectionProps {
   actionTaskId: string | null
@@ -21,6 +71,116 @@ interface TaskSectionProps {
   onTaskAction: (action: TaskAction, taskId: string) => Promise<void>
 }
 
+function TaskFilterRail({
+  filter,
+  onFilterChange,
+  getFilterCount
+}: TaskFilterRailProps): React.JSX.Element {
+  return (
+    <aside className="task-filter-rail">
+      <header className="task-filter-rail-header">
+        <span className="panel-kicker">Categories</span>
+        <h3>任务分类</h3>
+      </header>
+
+      <div className="task-filter-list">
+        {FILTER_ITEMS.map((item) => (
+          <button
+            key={item.id}
+            className={`task-filter-item${filter === item.id ? ' task-filter-item-active' : ''}`}
+            type="button"
+            onClick={() => onFilterChange(item.id)}
+          >
+            <span className="task-filter-topline">
+              <strong>{item.label}</strong>
+              <span>{getFilterCount(item.id)}</span>
+            </span>
+            <small>{item.description}</small>
+          </button>
+        ))}
+      </div>
+    </aside>
+  )
+}
+
+function TaskQueuePanel({
+  currentFilter,
+  filteredTasks,
+  selectedTaskId,
+  onSelectTask
+}: TaskQueuePanelProps): React.JSX.Element {
+  return (
+    <section className="task-list-panel">
+      <header className="task-list-panel-header">
+        <span className="panel-kicker">Queue</span>
+        <h3>{FILTER_ITEMS.find((item) => item.id === currentFilter)?.label ?? '全部任务'}</h3>
+      </header>
+
+      <div className="task-list">
+        {filteredTasks.length > 0 ? (
+          filteredTasks.map((task) => (
+            <article
+              key={task.id}
+              className={`task-card${task.id === selectedTaskId ? ' task-card-selected' : ''}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectTask(task.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  onSelectTask(task.id)
+                }
+              }}
+            >
+              <div className="task-card-header">
+                <div>
+                  <strong>{task.name}</strong>
+                  <p>{task.savePath}</p>
+                </div>
+                <span className={`status-badge status-${task.status}`}>{formatStatus(task.status)}</span>
+              </div>
+
+              <div className="task-progress-row">
+                <div className="task-progress-main">
+                  <strong>{formatProgress(task.progress)}</strong>
+                  <span>
+                    {formatBytes(task.downloadedBytes)}
+                    {typeof task.totalBytes === 'number'
+                      ? ` / ${formatBytes(task.totalBytes)}`
+                      : ' / 待确定'}
+                  </span>
+                </div>
+                <div className="task-progress-bar">
+                  <span style={{ width: `${task.progress * 100}%` }} />
+                </div>
+              </div>
+
+              <dl className="task-meta-grid">
+                <div>
+                  <dt>速度</dt>
+                  <dd>{formatBytes(task.speedBytes)}/s</dd>
+                </div>
+                <div>
+                  <dt>大小</dt>
+                  <dd>{typeof task.totalBytes === 'number' ? formatBytes(task.totalBytes) : '待确定'}</dd>
+                </div>
+                <div>
+                  <dt>ETA</dt>
+                  <dd>{formatEtaSeconds(task.etaSeconds)}</dd>
+                </div>
+              </dl>
+
+              {task.errorMessage ? <p className="task-inline-error">{task.errorMessage}</p> : null}
+            </article>
+          ))
+        ) : (
+          <p className="empty-state">当前分类下还没有任务。</p>
+        )}
+      </div>
+    </section>
+  )
+}
+
 export function TaskSection({
   actionTaskId,
   isLoadingTasks,
@@ -30,10 +190,44 @@ export function TaskSection({
   onSelectTask,
   onTaskAction
 }: TaskSectionProps): React.JSX.Element {
-  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null
+  const [filter, setFilter] = useState<TaskWorkspaceFilter>('all')
+  const sortedTasks = sortTasksForWorkspace(tasks)
+  const filteredTasks = sortedTasks.filter((task) => matchesTaskWorkspaceFilter(task, filter))
+  const selectedTask = filteredTasks.find((task) => task.id === selectedTaskId) ?? filteredTasks[0] ?? null
   const activeTasks = tasks.filter((task) => ['pending', 'metadata', 'downloading'].includes(task.status))
   const failedTasks = tasks.filter((task) => task.status === 'failed')
   const pausedTasks = tasks.filter((task) => task.status === 'paused')
+  const completedTasks = tasks.filter((task) => task.status === 'completed')
+
+  useEffect(() => {
+    if (filteredTasks.length === 0) {
+      return
+    }
+
+    if (!selectedTaskId || !filteredTasks.some((task) => task.id === selectedTaskId)) {
+      onSelectTask(filteredTasks[0].id)
+    }
+  }, [filteredTasks, onSelectTask, selectedTaskId])
+
+  function getFilterCount(targetFilter: TaskWorkspaceFilter): number {
+    if (targetFilter === 'all') {
+      return tasks.length
+    }
+
+    if (targetFilter === 'active') {
+      return activeTasks.length
+    }
+
+    if (targetFilter === 'paused') {
+      return pausedTasks.length
+    }
+
+    if (targetFilter === 'completed') {
+      return completedTasks.length
+    }
+
+    return failedTasks.length
+  }
 
   return (
     <section className="task-section panel">
@@ -62,68 +256,19 @@ export function TaskSection({
 
       {!isLoadingTasks && tasks.length > 0 ? (
         <div className="task-layout">
-          <div className="task-list">
-            {tasks.map((task) => (
-              <article
-                key={task.id}
-                className={`task-card${task.id === selectedTaskId ? ' task-card-selected' : ''}`}
-                role="button"
-                tabIndex={0}
-                onClick={() => onSelectTask(task.id)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    onSelectTask(task.id)
-                  }
-                }}
-              >
-                <div className="task-card-header">
-                  <div>
-                    <strong>{task.name}</strong>
-                    <p>{task.remoteId ?? task.id}</p>
-                  </div>
-                  <span className={`status-badge status-${task.status}`}>
-                    {formatStatus(task.status)}
-                  </span>
-                </div>
+          <TaskFilterRail filter={filter} getFilterCount={getFilterCount} onFilterChange={setFilter} />
 
-                <div className="task-progress-row">
-                  <div className="task-progress-main">
-                    <strong>{formatProgress(task.progress)}</strong>
-                    <span>
-                      {formatBytes(task.downloadedBytes)}
-                      {typeof task.totalBytes === 'number' ? ` / ${formatBytes(task.totalBytes)}` : ''}
-                    </span>
-                  </div>
-                  <div className="task-progress-bar">
-                    <span style={{ width: `${task.progress * 100}%` }} />
-                  </div>
-                </div>
-
-                <dl className="task-meta-grid">
-                  <div>
-                    <dt>速度</dt>
-                    <dd>{formatBytes(task.speedBytes)}/s</dd>
-                  </div>
-                  <div>
-                    <dt>已下载</dt>
-                    <dd>{formatBytes(task.downloadedBytes)}</dd>
-                  </div>
-                  <div>
-                    <dt>ETA</dt>
-                    <dd>{formatEtaSeconds(task.etaSeconds)}</dd>
-                  </div>
-                </dl>
-
-                {task.errorMessage ? <p className="task-inline-error">{task.errorMessage}</p> : null}
-              </article>
-            ))}
-          </div>
+          <TaskQueuePanel
+            currentFilter={filter}
+            filteredTasks={filteredTasks}
+            selectedTaskId={selectedTask?.id ?? null}
+            onSelectTask={onSelectTask}
+          />
 
           <aside className="task-detail">
             <header className="task-detail-header">
               <span className="panel-kicker">Task detail</span>
-              <h3>基础信息</h3>
+              <h3>任务详情</h3>
             </header>
 
             {selectedTask ? (

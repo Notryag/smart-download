@@ -66,6 +66,18 @@ export class Aria2RuntimeSessionStore {
     return nextSession
   }
 
+  replaceSessionGid(taskId: string, gid: string, updatedAt: string): RuntimeSession {
+    const session = this.getSessionOrThrow(taskId)
+    const nextSession = {
+      ...session,
+      gid,
+      updatedAt
+    }
+
+    this.sessions.set(taskId, nextSession)
+    return nextSession
+  }
+
   deleteSession(taskId: string): void {
     this.sessions.delete(taskId)
   }

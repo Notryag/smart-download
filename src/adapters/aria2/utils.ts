@@ -88,7 +88,7 @@ export function buildSnapshot(
 
   return {
     taskId: session.taskId,
-    remoteId: session.gid,
+    remoteId: result.gid || session.gid,
     status,
     totalBytes,
     downloadedBytes,

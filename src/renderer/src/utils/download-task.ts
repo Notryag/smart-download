@@ -1,5 +1,15 @@
 import type { DownloadTask } from '../../../types'
 
+export const TASK_WORKSPACE_FILTERS = [
+  'all',
+  'active',
+  'paused',
+  'completed',
+  'failed'
+] as const
+
+export type TaskWorkspaceFilter = (typeof TASK_WORKSPACE_FILTERS)[number]
+
 export function isSupportedSource(value: string): boolean {
   return value.trim().startsWith('magnet:?')
 }
@@ -83,4 +93,59 @@ export function canPauseTask(task: DownloadTask): boolean {
 
 export function canResumeTask(task: DownloadTask): boolean {
   return task.status === 'paused'
+}
+
+export function matchesTaskWorkspaceFilter(
+  task: DownloadTask,
+  filter: TaskWorkspaceFilter
+): boolean {
+  if (filter === 'all') {
+    return true
+  }
+
+  if (filter === 'active') {
+    return ['pending', 'metadata', 'downloading'].includes(task.status)
+  }
+
+  if (filter === 'paused') {
+    return task.status === 'paused'
+  }
+
+  if (filter === 'completed') {
+    return task.status === 'completed'
+  }
+
+  return task.status === 'failed'
+}
+
+export function sortTasksForWorkspace(tasks: DownloadTask[]): DownloadTask[] {
+  return [...tasks].sort((left, right) => {
+    const priorityDiff = getWorkspaceTaskPriority(left) - getWorkspaceTaskPriority(right)
+
+    if (priorityDiff !== 0) {
+      return priorityDiff
+    }
+
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+  })
+}
+
+function getWorkspaceTaskPriority(task: DownloadTask): number {
+  if (['pending', 'metadata', 'downloading'].includes(task.status)) {
+    return 0
+  }
+
+  if (task.status === 'failed') {
+    return 1
+  }
+
+  if (task.status === 'paused') {
+    return 2
+  }
+
+  if (task.status === 'completed') {
+    return 3
+  }
+
+  return 4
 }

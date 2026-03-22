@@ -48,6 +48,18 @@ describe('aria2 utils', () => {
     expect(snapshot.etaSeconds).toBe(15)
   })
 
+  it('prefers the current aria2 gid in snapshots', () => {
+    const snapshot = buildSnapshot(createSession({ gid: 'gid-1' }), {
+      gid: 'gid-2',
+      status: 'active',
+      totalLength: '100',
+      completedLength: '25',
+      downloadSpeed: '5'
+    })
+
+    expect(snapshot.remoteId).toBe('gid-2')
+  })
+
   it('maps terminal aria2 states to settled task statuses', () => {
     const paused = buildSnapshot(createSession(), {
       gid: 'gid-1',

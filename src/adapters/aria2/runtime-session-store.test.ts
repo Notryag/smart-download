@@ -66,6 +66,10 @@ describe('Aria2RuntimeSessionStore', () => {
     const touchedSession = store.touchSession('task-1', '2026-03-21T12:03:00.000Z')
     expect(touchedSession.updatedAt).toBe('2026-03-21T12:03:00.000Z')
 
+    const switchedSession = store.replaceSessionGid('task-1', 'gid-2', '2026-03-21T12:04:00.000Z')
+    expect(switchedSession.gid).toBe('gid-2')
+    expect(switchedSession.updatedAt).toBe('2026-03-21T12:04:00.000Z')
+
     store.deleteSession('task-1')
     expect(() => store.getSessionOrThrow('task-1')).toThrow('Download session not found')
   })

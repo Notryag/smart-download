@@ -97,6 +97,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
   private readonly stateWaiter: Aria2StateWaiter
   private readonly lastTaskErrorLog = new Map<string, string>()
   private readonly lastZeroSpeedLogAt = new Map<string, number>()
+  private static readonly FOLLOWED_TASK_MAX_DEPTH = 4
 
   constructor(
     config: Aria2ClientConfig | null,
@@ -241,9 +242,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
   }
 
   async getTaskSnapshot(input: TaskIdInput): Promise<DownloadTaskSnapshot> {
-    const session = this.sessionStore.getSessionOrThrow(input.taskId)
-    const result = await this.getClientOrThrow().tellStatus(session.gid)
-    const snapshot = buildSnapshot(session, result)
+    const { result, snapshot } = await this.readSnapshotWithFollowedTasks(input.taskId)
     this.maybeLogSnapshot(result, snapshot)
     this.sessionStore.touchSession(input.taskId, snapshot.updatedAt)
 
@@ -325,6 +324,41 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
     }
 
     return this.client
+  }
+
+  private async readSnapshotWithFollowedTasks(taskId: string): Promise<{
+    result: Aria2TellStatusResult
+    snapshot: DownloadTaskSnapshot
+  }> {
+    const client = this.getClientOrThrow()
+    let session = this.sessionStore.getSessionOrThrow(taskId)
+    let depth = 0
+
+    while (depth < Aria2DownloadAdapter.FOLLOWED_TASK_MAX_DEPTH) {
+      const result = await client.tellStatus(session.gid)
+      const followedGid = result.followedBy?.[0]
+
+      if (!followedGid || followedGid === session.gid) {
+        return {
+          result,
+          snapshot: buildSnapshot(session, result)
+        }
+      }
+
+      const switchedAt = toIsoNow()
+      this.logger?.info('Switching aria2 task session to followed download GID', {
+        category: 'aria2-adapter',
+        details: {
+          fromGid: session.gid,
+          toGid: followedGid
+        },
+        taskId
+      })
+      session = this.sessionStore.replaceSessionGid(taskId, followedGid, switchedAt)
+      depth += 1
+    }
+
+    throw new Error('aria2 followed download chain is deeper than expected')
   }
 
   private maybeLogSnapshot(result: Aria2TellStatusResult, snapshot: DownloadTaskSnapshot): void {
