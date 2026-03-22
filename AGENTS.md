@@ -16,7 +16,8 @@ Electron 桌面端智能下载调度器。
 - 不确定时先读代码，不要猜
 - 不改无关文件
 - 完成后更新 TASKS.md
-- 仅在项目已存在对应脚本时运行 lint / typecheck
+- 完成一个小任务后默认直接提交 commit
+- 提交前校验统一交给仓库 hook 处理
 
 ## Tech stack
 - Electron
@@ -44,4 +45,4 @@ Electron 桌面端智能下载调度器。
 - 应用能创建 magnet 下载任务
 - 进度和状态能正确更新
 - 失败时有清晰提示
-- lint / typecheck 通过（若脚本已存在）
+- 改动已提交，且提交前校验由 hook 自动通过
