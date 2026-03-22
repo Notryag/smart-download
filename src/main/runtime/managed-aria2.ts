@@ -1,4 +1,4 @@
-import { closeSync, existsSync, mkdirSync, openSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createServer } from 'node:net'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -87,6 +87,87 @@ function createRpcSecret(): string {
   return crypto.randomUUID().replace(/-/g, '')
 }
 
+function sanitizeAria2SessionFile(sessionPath: string, logger: InMemoryLogger): void {
+  const original = readFileSync(sessionPath, 'utf8')
+
+  if (!original.trim()) {
+    return
+  }
+
+  const blocks = parseSessionBlocks(original)
+  const sanitizedBlocks: string[][] = []
+  const seenMagnetInfoHashes = new Set<string>()
+  let removedCount = 0
+
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index]
+    const magnetInfoHash = extractMagnetInfoHash(block[0] ?? '')
+
+    if (magnetInfoHash && seenMagnetInfoHashes.has(magnetInfoHash)) {
+      removedCount += 1
+      continue
+    }
+
+    if (magnetInfoHash) {
+      seenMagnetInfoHashes.add(magnetInfoHash)
+    }
+
+    sanitizedBlocks.unshift(block)
+  }
+
+  if (removedCount === 0) {
+    return
+  }
+
+  writeFileSync(sessionPath, `${sanitizedBlocks.map((block) => block.join('\n')).join('\n')}\n`)
+  logger.warning('Removed duplicated magnet entries from aria2 session file before startup', {
+    category: 'aria2-runtime',
+    details: {
+      removedCount,
+      sessionPath
+    }
+  })
+}
+
+function parseSessionBlocks(content: string): string[][] {
+  const lines = content.replaceAll('\r\n', '\n').split('\n')
+  const blocks: string[][] = []
+  let currentBlock: string[] = []
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      continue
+    }
+
+    if (!line.startsWith(' ') && !line.startsWith('\t')) {
+      if (currentBlock.length > 0) {
+        blocks.push(currentBlock)
+      }
+
+      currentBlock = [line]
+      continue
+    }
+
+    if (currentBlock.length === 0) {
+      continue
+    }
+
+    currentBlock.push(line)
+  }
+
+  if (currentBlock.length > 0) {
+    blocks.push(currentBlock)
+  }
+
+  return blocks
+}
+
+function extractMagnetInfoHash(source: string): string | null {
+  const match = source.match(/xt=urn:btih:([^&]+)/i)
+  const normalized = match?.[1]?.trim().toLowerCase()
+  return normalized ? normalized : null
+}
+
 export class ManagedAria2Service {
   private child: ChildProcess | null = null
   private managedConfig: Aria2ClientConfig | null = null
@@ -118,6 +199,7 @@ export class ManagedAria2Service {
       mkdirSync(runtimeDir, { recursive: true })
       mkdirSync(downloadDir, { recursive: true })
       closeSync(openSync(sessionPath, 'a'))
+      sanitizeAria2SessionFile(sessionPath, this.logger)
 
       this.managedConfig = {
         rpcUrl: `http://127.0.0.1:${port}/jsonrpc`,
