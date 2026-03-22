@@ -80,6 +80,7 @@ describe('Aria2DownloadAdapter attach options', () => {
         'urn:btih:1234567890123456789012345678901234567890'
       )
       expect(attachedMagnet.searchParams.get('dn')).toBe('ubuntu.iso')
+      expect(attachedMagnet.searchParams.getAll('tr')).toEqual([...ARIA2_FALLBACK_TRACKERS])
       for (const tracker of ARIA2_FALLBACK_TRACKERS) {
         expect(attachedMagnet.searchParams.getAll('tr')).toContain(tracker)
       }

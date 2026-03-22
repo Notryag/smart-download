@@ -130,14 +130,14 @@ describe('aria2 utils', () => {
     )
   })
 
-  it('appends fallback trackers to magnet sources without duplicating existing entries', () => {
+  it('prioritizes fallback trackers before existing magnet trackers without duplication', () => {
     const normalized = normalizeMagnetSourceForAria2(
-      `magnet:?xt=urn:btih:1234567890123456789012345678901234567890&tr=${encodeURIComponent(ARIA2_FALLBACK_TRACKERS[0])}`
+      `magnet:?xt=urn:btih:1234567890123456789012345678901234567890&tr=${encodeURIComponent('https://torrent.ubuntu.com/announce')}&tr=${encodeURIComponent(ARIA2_FALLBACK_TRACKERS[0])}`
     )
     const trackers = new URL(normalized.source).searchParams.getAll('tr')
 
     expect(normalized.addedTrackerCount).toBe(ARIA2_FALLBACK_TRACKERS.length - 1)
-    expect(trackers).toEqual([ARIA2_FALLBACK_TRACKERS[0], ...ARIA2_FALLBACK_TRACKERS.slice(1)])
+    expect(trackers).toEqual([...ARIA2_FALLBACK_TRACKERS, 'https://torrent.ubuntu.com/announce'])
   })
 
   it('rejects blank sources early', () => {

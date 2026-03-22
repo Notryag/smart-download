@@ -8,6 +8,9 @@ export const ARIA2_STATE_SETTLE_TIMEOUT_MS = 5_000
 export const ARIA2_STATE_SETTLE_INTERVAL_MS = 150
 export const ARIA2_DIAGNOSTIC_LOG_INTERVAL_MS = 30_000
 export const ARIA2_FALLBACK_TRACKERS = [
+  'https://http1.torrust-tracker-demo.com:443/announce',
+  'https://tracker.qingwapt.org:443/announce',
+  'https://tracker.aburaya.live:443/announce',
   'udp://tracker.opentrackr.org:1337/announce',
   'udp://open.stealth.si:80/announce',
   'udp://tracker.torrent.eu.org:451/announce',
@@ -48,23 +51,42 @@ export function normalizeMagnetSourceForAria2(source: string): {
       }
     }
 
-    const existingTrackers = new Set(
-      magnet.searchParams.getAll('tr').map((tracker) => tracker.trim().toLowerCase())
-    )
-    let addedTrackerCount = 0
+    const existingTrackers = magnet.searchParams.getAll('tr').map((tracker) => tracker.trim())
+    const mergedTrackers: string[] = []
+    const seenTrackers = new Set<string>()
 
-    for (const tracker of ARIA2_FALLBACK_TRACKERS) {
-      if (existingTrackers.has(tracker.toLowerCase())) {
+    for (const tracker of [...ARIA2_FALLBACK_TRACKERS, ...existingTrackers]) {
+      const normalizedTracker = tracker.toLowerCase()
+
+      if (!tracker || seenTrackers.has(normalizedTracker)) {
         continue
       }
 
-      magnet.searchParams.append('tr', tracker)
-      addedTrackerCount += 1
+      seenTrackers.add(normalizedTracker)
+      mergedTrackers.push(tracker)
     }
+
+    const nextSearchParams = new URLSearchParams()
+
+    for (const [key, value] of magnet.searchParams.entries()) {
+      if (key === 'tr') {
+        continue
+      }
+
+      nextSearchParams.append(key, value)
+    }
+
+    for (const tracker of mergedTrackers) {
+      nextSearchParams.append('tr', tracker)
+    }
+
+    magnet.search = nextSearchParams.toString()
 
     return {
       source: magnet.toString(),
-      addedTrackerCount
+      addedTrackerCount: mergedTrackers.filter((tracker) =>
+        !existingTrackers.some((existingTracker) => existingTracker.toLowerCase() === tracker.toLowerCase())
+      ).length
     }
   } catch {
     return {

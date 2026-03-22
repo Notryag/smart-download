@@ -92,6 +92,9 @@ it('attaches a task through aria2 RPC and returns the first snapshot', async () 
   expect(attachedMagnet.searchParams.get('xt')).toBe(
     'urn:btih:1234567890123456789012345678901234567890'
   )
+  expect(attachedMagnet.searchParams.getAll('tr').slice(0, ARIA2_FALLBACK_TRACKERS.length)).toEqual(
+    [...ARIA2_FALLBACK_TRACKERS]
+  )
   for (const tracker of ARIA2_FALLBACK_TRACKERS) {
     expect(attachedMagnet.searchParams.getAll('tr')).toContain(tracker)
   }
