@@ -70,7 +70,7 @@ describe('BasicDiagnosticsService', () => {
           downloadedBytes: 15,
           facts: {
             sourceType: 'magnet',
-            seedersCount: 8,
+            seedersCount: 1,
             trackerCount: 1,
             fallbackTrackerCount: 3,
             zeroSpeedDurationMs: 61_000
@@ -96,7 +96,7 @@ describe('BasicDiagnosticsService', () => {
             taskId: 'task-2',
             status: 'downloading',
             sourceType: 'magnet',
-            seedersCount: 8,
+            seedersCount: 1,
             trackerCount: 1,
             fallbackTrackerCount: 3,
             zeroSpeedDurationMs: 61_000
@@ -109,6 +109,11 @@ describe('BasicDiagnosticsService', () => {
         }
       })
       expect(summary.highlights).toHaveLength(2)
+      expect(summary.highlights[0].detail).toContain('资源热度较低')
+      expect(summary.highlights[0].detail).toContain('建议降低速度预期')
+      expect(summary.highlights[1].detail).toContain('仍未发现稳定 peer')
+      expect(summary.highlights[1].detail).toContain('资源侧瓶颈')
+      expect(summary.highlights[1].detail).toContain('建议降低速度预期')
     } finally {
       vi.useRealTimers()
     }

@@ -128,12 +128,28 @@ describe('InMemoryTaskManager create flow', () => {
 
   it('surfaces a readable message when metadata fetch has no available peers yet', async () => {
     const adapter = createAdapterMock()
+    adapter.attachTask = vi.fn(async ({ taskId, source, savePath }) => ({
+      id: `session-${taskId}`,
+      taskId,
+      remoteId: `gid-${taskId}`,
+      source,
+      savePath,
+      status: 'pending',
+      totalBytes: 0,
+      downloadedBytes: 0,
+      speedBytes: 0,
+      trackerCount: 1,
+      fallbackTrackerCount: 5,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }))
     adapter.startTask = vi.fn(async ({ taskId }) =>
       createSnapshot(taskId, `gid-${taskId}`, {
         status: 'metadata',
         totalBytes: 0,
         downloadedBytes: 0,
         speedBytes: 0,
+        seedersCount: 0,
         progress: 0
       })
     )
@@ -145,7 +161,9 @@ describe('InMemoryTaskManager create flow', () => {
     })
 
     expect(task.status).toBe('metadata')
-    expect(task.errorMessage).toContain('当前未连接到可用 peer')
+    expect(task.errorMessage).toContain('当前仍未发现可用 peer')
+    expect(task.errorMessage).toContain('资源热度较低')
+    expect(task.errorMessage).toContain('已补充 5 个 fallback tracker')
   })
 
   it('tracks magnet fact fields across creation and repeated metadata syncs', async () => {
@@ -212,7 +230,9 @@ describe('InMemoryTaskManager create flow', () => {
 
       const [syncedTask] = await taskManager.listTasks()
       expect(syncedTask.status).toBe('metadata')
-      expect(syncedTask.errorMessage).toContain('当前未连接到可用 peer')
+      expect(syncedTask.errorMessage).toContain('当前仍未发现可用 peer')
+      expect(syncedTask.errorMessage).toContain('资源热度较低')
+      expect(syncedTask.errorMessage).toContain('已补充 7 个 fallback tracker')
       expect(syncedTask.facts).toMatchObject({
         sourceType: 'magnet',
         seedersCount: 0,
@@ -235,7 +255,7 @@ describe('InMemoryTaskManager create flow', () => {
         zeroSpeedDurationMs: 45_000
       })
       expect(store.tasks.get(task.id)?.status).toBe('metadata')
-      expect(store.tasks.get(task.id)?.errorMessage).toContain('当前未连接到可用 peer')
+      expect(store.tasks.get(task.id)?.errorMessage).toContain('资源热度较低')
     } finally {
       vi.useRealTimers()
     }
