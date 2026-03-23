@@ -4,6 +4,19 @@
 Electron 桌面端智能下载调度器。
 第一阶段目标只有一个：跑通 magnet 下载主链路，并把失败原因说清楚。
 
+## Start here
+
+每次接手默认只读：
+
+1. `AGENTS.md`
+2. `TASKS.md`
+
+然后按需处理：
+
+- 需要理解当前实现时，再读 `docs/ARCHITECTURE.md`
+- 需要确认历史取舍时，再读相关 `docs/decisions/*.md`
+- 先搜索相关代码，再展开具体文件，不要预读整仓文档
+
 ## Current scope
 - 只做 Electron 桌面端
 - 只做 magnet -> BT 下载
@@ -18,12 +31,6 @@ Electron 桌面端智能下载调度器。
 - 完成后更新 TASKS.md
 - 完成一个小任务后默认直接提交 commit
 - 提交前校验统一交给仓库 hook 处理
-
-## Tech stack
-- Electron
-- React + TypeScript
-- BT adapter
-- SQLite（第二阶段）
 
 ## Rules
 - 不自研 BT 协议栈
@@ -40,6 +47,12 @@ Electron 桌面端智能下载调度器。
 - src/adapters: 下载引擎适配层
 - src/storage: 持久化
 - src/types: 类型定义
+
+## Current reality
+- 当前下载主链路统一走内置托管的 `aria2`
+- renderer 只负责 UI 与订阅，不承担下载调度
+- dashboard 状态同步已经切到 `main -> renderer` 主动推送
+- `src/adapters/bt` 里的 qBittorrent 相关代码不是当前生效主链路
 
 ## Done criteria
 - 应用能创建 magnet 下载任务

@@ -3,7 +3,7 @@
 ## 当前目标
 做一个 Electron 桌面端 MVP，先支持 magnet 主链路稳定运行，并把失败原因说清楚。
 
-## 当前实现基线
+## 当前基线
 
 - 当前运行主链路统一走内置托管的 aria2
 - 新建任务入口只允许 magnet
@@ -13,7 +13,7 @@
 ## 当前优先级
 
 以 `TASKS.md` 为准。
-`PLANS.md` 只保留高层背景，不再记录逐条实现任务。
+这里不再记录逐条实现任务。
 
 ## 暂不做
 
@@ -26,11 +26,3 @@
 - 下载引擎进程与 RPC 配置仍然复杂
 - 状态同步和任务生命周期仍然容易出错
 - Electron main / renderer 边界容易混乱
-
-## 参考文档
-
-- `AGENTS.md`
-- `TASKS.md`
-- `docs/ARCHITECTURE.md`
-- `docs/AI_CONTEXT.md`
-- `docs/decisions/`
