@@ -128,14 +128,14 @@ describe('BasicDiagnosticsService', () => {
       expect(summary.highlights[1].detail).toContain('建议降低速度预期')
       expect(summary.guidance).toHaveLength(2)
       expect(summary.guidance[0]).toMatchObject({
-        reason: expect.stringContaining('资源热度较低'),
-        bottleneck: expect.stringContaining('资源侧'),
-        nextStep: expect.stringContaining('降低速度预期')
+        code: 'magnet_metadata_sparse_peers',
+        severity: 'warning',
+        shortMessage: expect.stringContaining('metadata 获取偏慢')
       })
       expect(summary.guidance[1]).toMatchObject({
-        reason: expect.stringContaining('仅有 1 个可用 peer'),
-        bottleneck: expect.stringContaining('资源侧'),
-        nextStep: expect.stringContaining('降低速度预期')
+        code: 'magnet_zero_speed_sparse_peers',
+        severity: 'warning',
+        shortMessage: expect.stringContaining('下载持续无速度')
       })
     } finally {
       vi.useRealTimers()
@@ -170,7 +170,7 @@ describe('BasicDiagnosticsService', () => {
     expect(summary.facts.resourceHealth).toMatchObject({
       score: 95,
       level: 'healthy',
-      reason: expect.stringContaining('资源侧信号稳定')
+      reason: expect.any(String)
     })
   })
 })

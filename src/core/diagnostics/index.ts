@@ -197,14 +197,18 @@ function buildDiagnosticGuidance(tasks: DownloadTask[]): DiagnosticGuidance[] {
       continue
     }
 
+    const severity = task.status === 'failed' ? 'error' : guidance.severity
+
     guidanceItems.push({
       id: `guidance-${task.id}`,
       title: task.name,
       taskId: task.id,
+      code: guidance.code,
+      severity,
+      shortMessage: guidance.shortMessage,
       reason: guidance.reason,
       bottleneck: guidance.bottleneck,
-      nextStep: guidance.nextStep,
-      severity: task.status === 'failed' ? 'error' : 'warning'
+      nextStep: guidance.nextStep
     })
   }
 

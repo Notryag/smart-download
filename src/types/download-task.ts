@@ -19,6 +19,10 @@ export const DOWNLOAD_TASK_STATUSES = [
 export type DownloadTaskStatus = (typeof DOWNLOAD_TASK_STATUSES)[number]
 
 export const FINISHED_DOWNLOAD_TASK_STATUSES = ['completed', 'failed', 'canceled'] as const
+export const DOWNLOAD_TASK_GUIDANCE_CODES = [
+  'magnet_metadata_sparse_peers',
+  'magnet_zero_speed_sparse_peers'
+] as const
 
 export interface CreateDownloadTaskInput {
   source: string
@@ -26,10 +30,16 @@ export interface CreateDownloadTaskInput {
   name?: string
 }
 
+export type DownloadTaskGuidanceCode = (typeof DOWNLOAD_TASK_GUIDANCE_CODES)[number]
+export type GuidanceSeverity = 'info' | 'warning' | 'error'
+
 export interface DownloadTaskGuidance {
-  reason: string
-  bottleneck: string
-  nextStep: string
+  code: DownloadTaskGuidanceCode
+  severity: GuidanceSeverity
+  shortMessage: string
+  reason?: string
+  bottleneck?: string
+  nextStep?: string
 }
 
 export interface DownloadTaskFacts {

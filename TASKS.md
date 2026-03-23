@@ -20,7 +20,7 @@
 
 - [x] 将慢速原因、当前瓶颈和下一步建议并入 inspector / diagnostics，优先做规则驱动说明，不直接依赖 AI
 - [x] 资源健康评分
-- [ ] 将 guidance 收口为 `code + severity + shortMessage`，减少长中文说明
+- [x] 将 guidance 收口为 `code + severity + shortMessage`，减少长中文说明
 - [ ] 将测试从中文文案断言切到 `code / score / level`
 - [ ] 继续补 magnet 结构化诊断字段，确保 AI 后续能直接读取现状
 - [ ] 诊断面板

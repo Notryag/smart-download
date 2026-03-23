@@ -177,9 +177,16 @@ function buildFallbackTrackerHint(fallbackTrackerCount: number | undefined): str
 function buildMetadataGuidance(task: DownloadTask): DownloadTaskGuidance {
   const seedersCount = task.facts?.seedersCount ?? task.seedersCount
   const fallbackHint = buildFallbackTrackerHint(task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount)
+  const shortMessage =
+    (seedersCount ?? 0) <= 1
+      ? `资源较冷，metadata 获取偏慢，当前 peer 不足。${fallbackHint}`.trim()
+      : `metadata 获取偏慢，当前 peer 仍偏少。${fallbackHint}`.trim()
 
   if ((seedersCount ?? 0) <= 0) {
     return {
+      code: 'magnet_metadata_sparse_peers',
+      severity: 'warning',
+      shortMessage,
       reason: `当前仍未发现可用 peer，资源热度较低。${fallbackHint}`.trim(),
       bottleneck: '瓶颈更偏向资源侧，tracker 与 DHT 仍未返回稳定 peer。',
       nextStep: '建议降低速度预期，并稍后再试或继续观察。'
@@ -188,6 +195,9 @@ function buildMetadataGuidance(task: DownloadTask): DownloadTaskGuidance {
 
   if (seedersCount === 1) {
     return {
+      code: 'magnet_metadata_sparse_peers',
+      severity: 'warning',
+      shortMessage,
       reason: `当前仅发现 1 个可用 peer，资源较冷。${fallbackHint}`.trim(),
       bottleneck: '瓶颈更偏向资源侧，peer 数过少导致元数据交换不稳定。',
       nextStep: '建议降低速度预期，并继续观察是否能连到更多 peer。'
@@ -195,6 +205,9 @@ function buildMetadataGuidance(task: DownloadTask): DownloadTaskGuidance {
   }
 
   return {
+    code: 'magnet_metadata_sparse_peers',
+    severity: 'warning',
+    shortMessage,
     reason: `当前 peer 仍偏少，tracker 暂未返回更稳定的节点。${fallbackHint}`.trim(),
     bottleneck: '瓶颈在资源侧可用 peer 不足，元数据阶段会继续拉长。',
     nextStep: '建议先降低速度预期，继续观察 peer 是否回升。'
@@ -204,9 +217,16 @@ function buildMetadataGuidance(task: DownloadTask): DownloadTaskGuidance {
 function buildZeroSpeedGuidance(task: DownloadTask): DownloadTaskGuidance {
   const seedersCount = task.facts?.seedersCount ?? task.seedersCount
   const fallbackHint = buildFallbackTrackerHint(task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount)
+  const shortMessage =
+    (seedersCount ?? 0) <= 1
+      ? `下载持续无速度，当前可用 peer 不足。${fallbackHint}`.trim()
+      : `下载持续无速度，当前 peer 偏少或连接不稳定。${fallbackHint}`.trim()
 
   if ((seedersCount ?? 0) <= 0) {
     return {
+      code: 'magnet_zero_speed_sparse_peers',
+      severity: 'warning',
+      shortMessage,
       reason: `已补 fallback tracker 后仍未发现稳定 peer，当前下载速度持续为 0。${fallbackHint}`.trim(),
       bottleneck: '瓶颈更偏向资源侧，可用 peer 仍不足以维持实际传输。',
       nextStep: '建议降低速度预期，稍后重试或继续观察资源热度变化。'
@@ -215,6 +235,9 @@ function buildZeroSpeedGuidance(task: DownloadTask): DownloadTaskGuidance {
 
   if (seedersCount === 1) {
     return {
+      code: 'magnet_zero_speed_sparse_peers',
+      severity: 'warning',
+      shortMessage,
       reason: `当前仅有 1 个可用 peer，下载速度持续为 0。${fallbackHint}`.trim(),
       bottleneck: '瓶颈更偏向资源侧，单个 peer 无法提供稳定吞吐。',
       nextStep: '建议降低速度预期，并继续观察是否能连到更多 peer。'
@@ -222,6 +245,9 @@ function buildZeroSpeedGuidance(task: DownloadTask): DownloadTaskGuidance {
   }
 
   return {
+    code: 'magnet_zero_speed_sparse_peers',
+    severity: 'warning',
+    shortMessage,
     reason: `当前 peer 仍偏少或连接不稳定，下载速度持续为 0。${fallbackHint}`.trim(),
     bottleneck: '瓶颈更偏向资源侧连接质量，而不是本地下载引擎。',
     nextStep: '建议先降低速度预期，继续观察是否恢复有效吞吐。'
@@ -308,12 +334,12 @@ export function resolveRuntimeTaskMessage(
 
   if (nextTask.status === 'metadata' && isStalled) {
     const guidance = buildTaskGuidance(nextTask)
-    return guidance ? `正在获取种子元数据；${guidance.reason} ${guidance.nextStep}` : undefined
+    return guidance ? `正在获取种子元数据；${guidance.shortMessage}` : undefined
   }
 
   if (nextTask.status === 'downloading' && isStalled) {
     const guidance = buildTaskGuidance(nextTask)
-    return guidance ? `${guidance.reason} ${guidance.nextStep}` : undefined
+    return guidance ? guidance.shortMessage : undefined
   }
 
   return undefined

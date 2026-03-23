@@ -61,20 +61,10 @@ export function DiagnosticsPanel({ diagnostics }: DiagnosticsPanelProps): React.
               {diagnostics.guidance.map((item) => (
                 <article key={item.id} className={`diagnostic-guidance diagnostic-${item.severity}`}>
                   <strong>{item.title}</strong>
-                  <dl>
-                    <div>
-                      <dt>原因</dt>
-                      <dd>{item.reason}</dd>
-                    </div>
-                    <div>
-                      <dt>瓶颈</dt>
-                      <dd>{item.bottleneck}</dd>
-                    </div>
-                    <div>
-                      <dt>建议</dt>
-                      <dd>{item.nextStep}</dd>
-                    </div>
-                  </dl>
+                  <p>
+                    {item.shortMessage ??
+                      [item.reason, item.bottleneck, item.nextStep].filter(Boolean).join(' ')}
+                  </p>
                 </article>
               ))}
             </div>

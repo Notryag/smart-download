@@ -38,9 +38,8 @@ describe('resolveRuntimeTaskMessage', () => {
 
     const message = resolveRuntimeTaskMessage(previousTask, nextTask)
 
-    expect(message).toContain('当前仍未发现可用 peer')
-    expect(message).toContain('资源热度较低')
-    expect(message).toContain('建议降低速度预期')
+    expect(message).toContain('正在获取种子元数据；')
+    expect(message).toContain('资源较冷，metadata 获取偏慢，当前 peer 不足')
     expect(message).toContain('7 个 fallback tracker')
   })
 
@@ -64,9 +63,7 @@ describe('resolveRuntimeTaskMessage', () => {
 
     const message = resolveRuntimeTaskMessage(previousTask, nextTask)
 
-    expect(message).toContain('下载速度持续为 0')
-    expect(message).toContain('当前仅有 1 个可用 peer')
-    expect(message).toContain('建议降低速度预期')
+    expect(message).toContain('下载持续无速度，当前可用 peer 不足')
     expect(message).toContain('3 个 fallback tracker')
   })
 
@@ -85,9 +82,9 @@ describe('resolveRuntimeTaskMessage', () => {
     const guidance = buildTaskGuidance(task)
 
     expect(guidance).toMatchObject({
-      reason: expect.stringContaining('资源热度较低'),
-      bottleneck: expect.stringContaining('资源侧'),
-      nextStep: expect.stringContaining('降低速度预期')
+      code: 'magnet_metadata_sparse_peers',
+      severity: 'warning',
+      shortMessage: expect.stringContaining('资源较冷，metadata 获取偏慢')
     })
   })
 

@@ -163,6 +163,23 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
 }
 
+function resetElectronMocks(): void {
+  electronMocks.handlers.clear()
+  electronMocks.windows.length = 0
+  electronMocks.ipcMain.handle.mockClear()
+  electronMocks.dialog.showOpenDialog.mockReset()
+  electronMocks.BrowserWindow.fromWebContents.mockReset()
+  electronMocks.BrowserWindow.getAllWindows.mockClear()
+}
+
+function registerHarness(harness: ReturnType<typeof createHarness>): void {
+  registerDownloadTaskIpc(
+    harness.taskManager as never,
+    harness.diagnosticsService as never,
+    harness.listLogs
+  )
+}
+
 describe('registerDownloadTaskIpc', () => {
   let intervalCallback: (() => void) | undefined
   let intervalUnref: ReturnType<typeof vi.fn>
@@ -170,12 +187,7 @@ describe('registerDownloadTaskIpc', () => {
   beforeEach(() => {
     intervalCallback = undefined
     intervalUnref = vi.fn()
-    electronMocks.handlers.clear()
-    electronMocks.windows.length = 0
-    electronMocks.ipcMain.handle.mockClear()
-    electronMocks.dialog.showOpenDialog.mockReset()
-    electronMocks.BrowserWindow.fromWebContents.mockReset()
-    electronMocks.BrowserWindow.getAllWindows.mockClear()
+    resetElectronMocks()
 
     vi.spyOn(globalThis, 'setInterval').mockImplementation((handler: TimerHandler) => {
       intervalCallback = handler as () => void
@@ -187,8 +199,7 @@ describe('registerDownloadTaskIpc', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-    electronMocks.handlers.clear()
-    electronMocks.windows.length = 0
+    resetElectronMocks()
   })
 
   it('creates a task and pushes the dashboard snapshot to active windows', async () => {
@@ -197,11 +208,7 @@ describe('registerDownloadTaskIpc', () => {
     electronMocks.windows.push(activeWindow, destroyedWindow)
     const harness = createHarness()
 
-    registerDownloadTaskIpc(
-      harness.taskManager as never,
-      harness.diagnosticsService as never,
-      harness.listLogs
-    )
+    registerHarness(harness)
 
     const createHandler = getHandler(DOWNLOAD_TASK_IPC_CHANNELS.createTask)
     const result = await createHandler({}, {
@@ -225,11 +232,7 @@ describe('registerDownloadTaskIpc', () => {
   it('returns the current dashboard snapshot from the dashboard handler', async () => {
     const harness = createHarness()
 
-    registerDownloadTaskIpc(
-      harness.taskManager as never,
-      harness.diagnosticsService as never,
-      harness.listLogs
-    )
+    registerHarness(harness)
 
     const dashboard = await getHandler(
       DOWNLOAD_TASK_IPC_CHANNELS.getDashboard
@@ -252,11 +255,7 @@ describe('registerDownloadTaskIpc', () => {
       filePaths: ['D:\\Downloads']
     })
 
-    registerDownloadTaskIpc(
-      harness.taskManager as never,
-      harness.diagnosticsService as never,
-      harness.listLogs
-    )
+    registerHarness(harness)
 
     const pickDirectory = getHandler(DOWNLOAD_TASK_IPC_CHANNELS.pickDirectory)
     const result = await pickDirectory({
@@ -279,11 +278,7 @@ describe('registerDownloadTaskIpc', () => {
     electronMocks.windows.push(activeWindow)
     const harness = createHarness()
 
-    registerDownloadTaskIpc(
-      harness.taskManager as never,
-      harness.diagnosticsService as never,
-      harness.listLogs
-    )
+    registerHarness(harness)
 
     await getHandler(channel)({}, { taskId: 'task-1' })
 
@@ -309,11 +304,7 @@ describe('registerDownloadTaskIpc', () => {
         })
     )
 
-    registerDownloadTaskIpc(
-      harness.taskManager as never,
-      harness.diagnosticsService as never,
-      harness.listLogs
-    )
+    registerHarness(harness)
 
     const createPromise = getHandler(DOWNLOAD_TASK_IPC_CHANNELS.createTask)({}, {
       source: 'magnet:?xt=urn:btih:1234567890123456789012345678901234567890',
@@ -367,16 +358,22 @@ describe('registerDownloadTaskIpc', () => {
             trackerSparseCount: 0
           }
         }
-      }
+      },
+      guidance: [
+        {
+          id: `guidance-${task.id}`,
+          title: task.name,
+          taskId: task.id,
+          code: 'magnet_metadata_sparse_peers',
+          severity: 'warning',
+          shortMessage: '资源较冷，metadata 获取偏慢，当前 peer 不足。'
+        }
+      ]
     }
 
     harness.diagnosticsService.getSummary = vi.fn(async () => diagnostics as never)
 
-    registerDownloadTaskIpc(
-      harness.taskManager as never,
-      harness.diagnosticsService as never,
-      harness.listLogs
-    )
+    registerHarness(harness)
 
     const dashboard = await getHandler(
       DOWNLOAD_TASK_IPC_CHANNELS.getDashboard
@@ -407,6 +404,14 @@ describe('registerDownloadTaskIpc', () => {
         level: 'critical'
       }
     })
+    expect(dashboard.diagnostics.guidance).toMatchObject([
+      {
+        taskId: task.id,
+        code: 'magnet_metadata_sparse_peers',
+        severity: 'warning',
+        shortMessage: expect.any(String)
+      }
+    ])
     expect(activeWindow.webContents.send).not.toHaveBeenCalled()
   })
 })

@@ -161,9 +161,12 @@ describe('InMemoryTaskManager create flow', () => {
     })
 
     expect(task.status).toBe('metadata')
-    expect(task.errorMessage).toContain('当前仍未发现可用 peer')
-    expect(task.errorMessage).toContain('资源热度较低')
+    expect(task.errorMessage).toContain('资源较冷，metadata 获取偏慢，当前 peer 不足')
     expect(task.errorMessage).toContain('已补充 5 个 fallback tracker')
+    expect(task.facts?.guidance).toMatchObject({
+      code: 'magnet_metadata_sparse_peers',
+      severity: 'warning'
+    })
   })
 
   it('tracks magnet fact fields across creation and repeated metadata syncs', async () => {
@@ -230,8 +233,7 @@ describe('InMemoryTaskManager create flow', () => {
 
       const [syncedTask] = await taskManager.listTasks()
       expect(syncedTask.status).toBe('metadata')
-      expect(syncedTask.errorMessage).toContain('当前仍未发现可用 peer')
-      expect(syncedTask.errorMessage).toContain('资源热度较低')
+      expect(syncedTask.errorMessage).toContain('资源较冷，metadata 获取偏慢，当前 peer 不足')
       expect(syncedTask.errorMessage).toContain('已补充 7 个 fallback tracker')
       expect(syncedTask.facts).toMatchObject({
         sourceType: 'magnet',
@@ -241,7 +243,11 @@ describe('InMemoryTaskManager create flow', () => {
         metadataSince: '2026-03-21T12:00:00.000Z',
         zeroSpeedSince: '2026-03-21T12:00:00.000Z',
         metadataElapsedMs: 45_000,
-        zeroSpeedDurationMs: 45_000
+        zeroSpeedDurationMs: 45_000,
+        guidance: {
+          code: 'magnet_metadata_sparse_peers',
+          severity: 'warning'
+        }
       })
       expect(taskManager.getTasks()[0].facts).toMatchObject(syncedTask.facts ?? {})
       expect(store.tasks.get(task.id)?.facts).toMatchObject({
@@ -252,10 +258,14 @@ describe('InMemoryTaskManager create flow', () => {
         metadataSince: '2026-03-21T12:00:00.000Z',
         zeroSpeedSince: '2026-03-21T12:00:00.000Z',
         metadataElapsedMs: 45_000,
-        zeroSpeedDurationMs: 45_000
+        zeroSpeedDurationMs: 45_000,
+        guidance: {
+          code: 'magnet_metadata_sparse_peers',
+          severity: 'warning'
+        }
       })
       expect(store.tasks.get(task.id)?.status).toBe('metadata')
-      expect(store.tasks.get(task.id)?.errorMessage).toContain('资源热度较低')
+      expect(store.tasks.get(task.id)?.errorMessage).toContain('资源较冷，metadata 获取偏慢')
     } finally {
       vi.useRealTimers()
     }

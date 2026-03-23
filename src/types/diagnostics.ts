@@ -1,6 +1,11 @@
-import type { DownloadTaskStatus, DownloadTaskType } from './download-task'
+import type {
+  DownloadTaskGuidanceCode,
+  DownloadTaskStatus,
+  DownloadTaskType,
+  GuidanceSeverity
+} from './download-task'
 
-export type DiagnosticSeverity = 'info' | 'warning' | 'error'
+export type DiagnosticSeverity = GuidanceSeverity
 export type DiagnosticResourceHealthLevel = 'healthy' | 'degraded' | 'critical'
 
 export interface DiagnosticHighlight {
@@ -37,10 +42,12 @@ export interface DiagnosticGuidance {
   id: string
   title: string
   taskId?: string
-  reason: string
-  bottleneck: string
-  nextStep: string
+  code: DownloadTaskGuidanceCode
   severity: DiagnosticSeverity
+  shortMessage: string
+  reason?: string
+  bottleneck?: string
+  nextStep?: string
 }
 
 export interface DiagnosticFactsSummary {
