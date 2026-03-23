@@ -2,7 +2,7 @@
 
 ## Current Priority
 
-当前阶段先补后端能力，再做 UI 收口。
+当前阶段先补 Phase 2 的非 UI 后端能力，再做 UI 收口。
 
 - [x] 规划并落地 magnet 慢速诊断事实层：补充 seeders、metadata 停留时长、持续 0 speed 时长、tracker / runtime 关键信息
 - [x] 基于 magnet 事实层补最小策略层：peer 少时降预期、长时间无速度时补提示与 fallback tracker 说明
@@ -18,6 +18,11 @@
 
 ## Next
 
+当前顺序：先补 Phase 2 后端增强，再做 UI 收口，最后再评估多引擎 / AI 扩展。
+
+- [ ] 补更多网络 / 源侧结构化信号，覆盖 tracker、peer、metadata 卡住等场景
+- [ ] 将现有诊断判断继续收口为稳定规则层，统一 `facts -> score -> guidance` 输出
+- [ ] 收敛 AI 可消费的低歧义输入 schema，补齐缺失字段与边界状态
 - [x] 将慢速原因、当前瓶颈和下一步建议并入 inspector / diagnostics，优先做规则驱动说明，不直接依赖 AI
 - [x] 资源健康评分
 - [x] 将 guidance 收口为 `code + severity + shortMessage`，减少长中文说明
