@@ -19,6 +19,10 @@
 
 ## Next
 
+- [ ] 规划并落地 magnet 慢速诊断事实层：补充 seeders、metadata 停留时长、持续 0 speed 时长、tracker / runtime 关键信息
+- [ ] 基于 magnet 事实层补最小策略层：peer 少时降预期、长时间无速度时补提示与 fallback tracker 说明
+- [ ] 将慢速原因、当前瓶颈和下一步建议并入 inspector / diagnostics，优先做规则驱动说明，不直接依赖 AI
+- [ ] 为 magnet 诊断与策略补充任务流转和用户文案测试，确保状态、提示和建议可追踪
 - [ ] 诊断面板
 - [ ] 资源健康评分
 - [ ] qBittorrent BT adapter
