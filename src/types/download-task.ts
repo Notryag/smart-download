@@ -26,6 +26,12 @@ export interface CreateDownloadTaskInput {
   name?: string
 }
 
+export interface DownloadTaskGuidance {
+  reason: string
+  bottleneck: string
+  nextStep: string
+}
+
 export interface DownloadTaskFacts {
   sourceType: DownloadTaskType
   seedersCount?: number
@@ -35,6 +41,7 @@ export interface DownloadTaskFacts {
   zeroSpeedSince?: string
   metadataElapsedMs?: number
   zeroSpeedDurationMs?: number
+  guidance?: DownloadTaskGuidance
 }
 
 export interface DownloadTask {

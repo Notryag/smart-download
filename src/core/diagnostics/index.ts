@@ -1,5 +1,6 @@
 import type {
   DownloadTask,
+  DiagnosticGuidance,
   DiagnosticHighlight,
   DiagnosticLogEntry,
   DiagnosticFactsSummary,
@@ -8,6 +9,7 @@ import type {
 } from '../../types'
 import type { DownloadAdapter } from '../../adapters'
 import type { LogEntry } from '../logger'
+import { buildTaskGuidance } from '../task-manager/task-utils'
 
 const LONG_METADATA_THRESHOLD_MS = 60_000
 const ZERO_SPEED_THRESHOLD_MS = 60_000
@@ -166,6 +168,30 @@ function buildDiagnosticFacts(taskFacts: DiagnosticTaskFact[]): DiagnosticFactsS
   }
 }
 
+function buildDiagnosticGuidance(tasks: DownloadTask[]): DiagnosticGuidance[] {
+  const guidanceItems: DiagnosticGuidance[] = []
+
+  for (const task of tasks) {
+    const guidance = task.facts?.guidance ?? buildTaskGuidance(task)
+
+    if (!guidance) {
+      continue
+    }
+
+    guidanceItems.push({
+      id: `guidance-${task.id}`,
+      title: task.name,
+      taskId: task.id,
+      reason: guidance.reason,
+      bottleneck: guidance.bottleneck,
+      nextStep: guidance.nextStep,
+      severity: task.status === 'failed' ? 'error' : 'warning'
+    })
+  }
+
+  return guidanceItems.slice(0, 2)
+}
+
 export class BasicDiagnosticsService {
   constructor(private readonly downloadAdapter: DownloadAdapter) {}
 
@@ -223,6 +249,7 @@ export class BasicDiagnosticsService {
       highlights,
       taskFacts,
       facts: buildDiagnosticFacts(taskFacts),
+      guidance: buildDiagnosticGuidance(tasks),
       recentLogs: logEntries.slice(0, 5).map(toDiagnosticLogEntry)
     }
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DownloadTask } from '../../types'
-import { resolveRuntimeTaskMessage } from './task-utils'
+import { buildTaskGuidance, resolveRuntimeTaskMessage } from './task-utils'
 
 function createTask(patch: Partial<DownloadTask> = {}): DownloadTask {
   return {
@@ -64,10 +64,30 @@ describe('resolveRuntimeTaskMessage', () => {
 
     const message = resolveRuntimeTaskMessage(previousTask, nextTask)
 
-    expect(message).toContain('当前下载速度持续为 0')
+    expect(message).toContain('下载速度持续为 0')
     expect(message).toContain('当前仅有 1 个可用 peer')
-    expect(message).toContain('资源侧瓶颈')
     expect(message).toContain('建议降低速度预期')
     expect(message).toContain('3 个 fallback tracker')
+  })
+
+  it('builds structured guidance for the inspector', () => {
+    const task = createTask({
+      status: 'metadata',
+      speedBytes: 0,
+      facts: {
+        sourceType: 'magnet',
+        seedersCount: 0,
+        fallbackTrackerCount: 7,
+        metadataElapsedMs: 120_000
+      }
+    })
+
+    const guidance = buildTaskGuidance(task)
+
+    expect(guidance).toMatchObject({
+      reason: expect.stringContaining('资源热度较低'),
+      bottleneck: expect.stringContaining('资源侧'),
+      nextStep: expect.stringContaining('降低速度预期')
+    })
   })
 })

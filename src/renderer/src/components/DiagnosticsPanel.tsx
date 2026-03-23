@@ -55,6 +55,30 @@ export function DiagnosticsPanel({ diagnostics }: DiagnosticsPanelProps): React.
           ) : (
             <p className="empty-state">当前没有额外告警，主链路状态正常。</p>
           )}
+
+          {diagnostics.guidance.length > 0 ? (
+            <div className="diagnostic-guidance-list">
+              {diagnostics.guidance.map((item) => (
+                <article key={item.id} className={`diagnostic-guidance diagnostic-${item.severity}`}>
+                  <strong>{item.title}</strong>
+                  <dl>
+                    <div>
+                      <dt>原因</dt>
+                      <dd>{item.reason}</dd>
+                    </div>
+                    <div>
+                      <dt>瓶颈</dt>
+                      <dd>{item.bottleneck}</dd>
+                    </div>
+                    <div>
+                      <dt>建议</dt>
+                      <dd>{item.nextStep}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : (
         <p className="empty-state">正在生成诊断摘要...</p>

@@ -3,7 +3,8 @@ import {
   isFinishedDownloadTaskStatus,
   type CreateDownloadTaskInput,
   type DownloadTask,
-  type DownloadTaskFacts
+  type DownloadTaskFacts,
+  type DownloadTaskGuidance
 } from '../../types'
 
 const RESTART_RECOVERY_MESSAGE = '应用重启后下载已停止，请手动恢复任务'
@@ -65,6 +66,13 @@ function parseDurationMs(from: string | undefined, to: string): number | undefin
   return Math.max(endedAt - startedAt, 0)
 }
 
+function hasFactPatch<Key extends keyof DownloadTaskFacts>(
+  patch: Partial<DownloadTaskFacts>,
+  key: Key
+): boolean {
+  return Object.prototype.hasOwnProperty.call(patch, key)
+}
+
 function buildMagnetFacts(
   task: DownloadTask,
   patch: Partial<DownloadTaskFacts>,
@@ -76,24 +84,30 @@ function buildMagnetFacts(
 
   const previousFacts = task.facts
   const metadataSince =
-    patch.metadataSince !== undefined ? patch.metadataSince : previousFacts?.metadataSince ?? task.metadataSince
+    hasFactPatch(patch, 'metadataSince')
+      ? patch.metadataSince
+      : previousFacts?.metadataSince ?? task.metadataSince
   const zeroSpeedSince =
-    patch.zeroSpeedSince !== undefined ? patch.zeroSpeedSince : previousFacts?.zeroSpeedSince ?? task.zeroSpeedSince
+    hasFactPatch(patch, 'zeroSpeedSince')
+      ? patch.zeroSpeedSince
+      : previousFacts?.zeroSpeedSince ?? task.zeroSpeedSince
 
   return {
     sourceType: 'magnet',
-    seedersCount:
-      patch.seedersCount !== undefined ? patch.seedersCount : previousFacts?.seedersCount ?? task.seedersCount,
-    trackerCount:
-      patch.trackerCount !== undefined ? patch.trackerCount : previousFacts?.trackerCount ?? task.trackerCount,
-    fallbackTrackerCount:
-      patch.fallbackTrackerCount !== undefined
-        ? patch.fallbackTrackerCount
-        : previousFacts?.fallbackTrackerCount ?? task.fallbackTrackerCount,
+    seedersCount: hasFactPatch(patch, 'seedersCount')
+      ? patch.seedersCount
+      : previousFacts?.seedersCount ?? task.seedersCount,
+    trackerCount: hasFactPatch(patch, 'trackerCount')
+      ? patch.trackerCount
+      : previousFacts?.trackerCount ?? task.trackerCount,
+    fallbackTrackerCount: hasFactPatch(patch, 'fallbackTrackerCount')
+      ? patch.fallbackTrackerCount
+      : previousFacts?.fallbackTrackerCount ?? task.fallbackTrackerCount,
     metadataSince,
     zeroSpeedSince,
     metadataElapsedMs: parseDurationMs(metadataSince, updatedAt),
-    zeroSpeedDurationMs: parseDurationMs(zeroSpeedSince, updatedAt)
+    zeroSpeedDurationMs: parseDurationMs(zeroSpeedSince, updatedAt),
+    guidance: hasFactPatch(patch, 'guidance') ? patch.guidance : previousFacts?.guidance
   }
 }
 
@@ -105,38 +119,73 @@ function buildFallbackTrackerHint(fallbackTrackerCount: number | undefined): str
   return ` 已补充 ${fallbackTrackerCount} 个 fallback tracker。`
 }
 
-function buildMetadataPolicyMessage(task: DownloadTask): string {
+function buildMetadataGuidance(task: DownloadTask): DownloadTaskGuidance {
   const seedersCount = task.facts?.seedersCount ?? task.seedersCount
-  const fallbackHint = buildFallbackTrackerHint(
-    task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount
-  )
+  const fallbackHint = buildFallbackTrackerHint(task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount)
 
   if ((seedersCount ?? 0) <= 0) {
-    return `正在获取种子元数据；当前仍未发现可用 peer，资源热度较低，建议降低速度预期并稍后再试。${fallbackHint}`.trim()
+    return {
+      reason: `当前仍未发现可用 peer，资源热度较低。${fallbackHint}`.trim(),
+      bottleneck: '瓶颈更偏向资源侧，tracker 与 DHT 仍未返回稳定 peer。',
+      nextStep: '建议降低速度预期，并稍后再试或继续观察。'
+    }
   }
 
   if (seedersCount === 1) {
-    return `正在获取种子元数据；当前仅发现 1 个可用 peer，资源较冷，建议降低速度预期。${fallbackHint}`.trim()
+    return {
+      reason: `当前仅发现 1 个可用 peer，资源较冷。${fallbackHint}`.trim(),
+      bottleneck: '瓶颈更偏向资源侧，peer 数过少导致元数据交换不稳定。',
+      nextStep: '建议降低速度预期，并继续观察是否能连到更多 peer。'
+    }
   }
 
-  return `正在获取种子元数据；当前 peer 仍偏少，tracker 暂未返回更稳定的节点，建议先降低速度预期。${fallbackHint}`.trim()
+  return {
+    reason: `当前 peer 仍偏少，tracker 暂未返回更稳定的节点。${fallbackHint}`.trim(),
+    bottleneck: '瓶颈在资源侧可用 peer 不足，元数据阶段会继续拉长。',
+    nextStep: '建议先降低速度预期，继续观察 peer 是否回升。'
+  }
 }
 
-function buildZeroSpeedPolicyMessage(task: DownloadTask): string {
+function buildZeroSpeedGuidance(task: DownloadTask): DownloadTaskGuidance {
   const seedersCount = task.facts?.seedersCount ?? task.seedersCount
-  const fallbackHint = buildFallbackTrackerHint(
-    task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount
-  )
+  const fallbackHint = buildFallbackTrackerHint(task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount)
 
   if ((seedersCount ?? 0) <= 0) {
-    return `当前下载速度持续为 0；已补 fallback tracker 后仍未发现稳定 peer，更可能是资源侧瓶颈，建议降低速度预期或稍后重试。${fallbackHint}`.trim()
+    return {
+      reason: `已补 fallback tracker 后仍未发现稳定 peer，当前下载速度持续为 0。${fallbackHint}`.trim(),
+      bottleneck: '瓶颈更偏向资源侧，可用 peer 仍不足以维持实际传输。',
+      nextStep: '建议降低速度预期，稍后重试或继续观察资源热度变化。'
+    }
   }
 
   if (seedersCount === 1) {
-    return `当前下载速度持续为 0；当前仅有 1 个可用 peer，更可能是资源侧瓶颈，建议降低速度预期。${fallbackHint}`.trim()
+    return {
+      reason: `当前仅有 1 个可用 peer，下载速度持续为 0。${fallbackHint}`.trim(),
+      bottleneck: '瓶颈更偏向资源侧，单个 peer 无法提供稳定吞吐。',
+      nextStep: '建议降低速度预期，并继续观察是否能连到更多 peer。'
+    }
   }
 
-  return `当前下载速度持续为 0；当前 peer 仍偏少或连接不稳定，建议先降低速度预期。${fallbackHint}`.trim()
+  return {
+    reason: `当前 peer 仍偏少或连接不稳定，下载速度持续为 0。${fallbackHint}`.trim(),
+    bottleneck: '瓶颈更偏向资源侧连接质量，而不是本地下载引擎。',
+    nextStep: '建议先降低速度预期，继续观察是否恢复有效吞吐。'
+  }
+}
+
+export function buildTaskGuidance(task: DownloadTask): DownloadTaskGuidance | undefined {
+  const isMetadataStalled = task.status === 'metadata' && task.speedBytes === 0
+  const isZeroSpeedStalled = task.status === 'downloading' && task.speedBytes === 0
+
+  if (isMetadataStalled) {
+    return buildMetadataGuidance(task)
+  }
+
+  if (isZeroSpeedStalled) {
+    return buildZeroSpeedGuidance(task)
+  }
+
+  return undefined
 }
 
 export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot): DownloadTask {
@@ -149,7 +198,7 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
       ? task.facts?.zeroSpeedSince ?? task.zeroSpeedSince ?? snapshot.updatedAt
       : undefined
 
-  return updateTask(task, {
+  const nextTask = updateTask(task, {
     remoteId: snapshot.remoteId ?? task.remoteId,
     status: snapshot.status,
     progress: snapshot.progress,
@@ -171,6 +220,21 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
     etaSeconds: snapshot.etaSeconds,
     errorMessage: snapshot.errorMessage
   })
+
+  const guidance = buildTaskGuidance(nextTask)
+
+  return updateTask(nextTask, {
+    facts:
+      nextTask.type === 'magnet'
+        ? buildMagnetFacts(
+            nextTask,
+            {
+              guidance
+            },
+            nextTask.updatedAt
+          )
+        : nextTask.facts
+  })
 }
 
 export function resolveRuntimeTaskMessage(
@@ -186,11 +250,13 @@ export function resolveRuntimeTaskMessage(
     nextTask.downloadedBytes === previousTask.downloadedBytes
 
   if (nextTask.status === 'metadata' && isStalled) {
-    return buildMetadataPolicyMessage(nextTask)
+    const guidance = buildTaskGuidance(nextTask)
+    return guidance ? `正在获取种子元数据；${guidance.reason} ${guidance.nextStep}` : undefined
   }
 
   if (nextTask.status === 'downloading' && isStalled) {
-    return buildZeroSpeedPolicyMessage(nextTask)
+    const guidance = buildTaskGuidance(nextTask)
+    return guidance ? `${guidance.reason} ${guidance.nextStep}` : undefined
   }
 
   return undefined
@@ -243,7 +309,8 @@ export function restoreTaskState(task: DownloadTask): DownloadTask {
         task,
         {
           metadataSince: undefined,
-          zeroSpeedSince: undefined
+          zeroSpeedSince: undefined,
+          guidance: undefined
         },
         new Date().toISOString()
       ),
@@ -261,7 +328,8 @@ export function restoreTaskState(task: DownloadTask): DownloadTask {
         task,
         {
           metadataSince: undefined,
-          zeroSpeedSince: undefined
+          zeroSpeedSince: undefined,
+          guidance: undefined
         },
         new Date().toISOString()
       ),
@@ -278,7 +346,8 @@ export function restoreTaskState(task: DownloadTask): DownloadTask {
         task,
         {
           metadataSince: undefined,
-          zeroSpeedSince: undefined
+          zeroSpeedSince: undefined,
+          guidance: undefined
         },
         new Date().toISOString()
       ),

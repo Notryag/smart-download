@@ -760,6 +760,34 @@ button {
   margin: 0;
 }
 
+.task-guidance-card,
+.diagnostic-guidance {
+  padding: 16px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: rgba(247, 250, 252, 0.92);
+}
+
+.task-guidance-list,
+.diagnostic-guidance dl {
+  display: grid;
+  gap: 12px;
+  margin: 10px 0 0;
+}
+
+.task-guidance-list dt,
+.diagnostic-guidance dt {
+  margin-bottom: 4px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.task-guidance-list dd,
+.diagnostic-guidance dd {
+  margin: 0;
+  line-height: 1.6;
+}
+
 .task-detail-grid div,
 .diagnostic-stats div {
   margin: 0;
@@ -808,6 +836,11 @@ button {
 }
 
 .diagnostic-list {
+  display: grid;
+  gap: 12px;
+}
+
+.diagnostic-guidance-list {
   display: grid;
   gap: 12px;
 }

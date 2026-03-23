@@ -87,6 +87,7 @@ function createDiagnostics(): DownloadDashboardSnapshot['diagnostics'] {
         trackerSparseCount: 0
       }
     },
+    guidance: [],
     recentLogs: []
   }
 }

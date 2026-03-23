@@ -114,6 +114,17 @@ describe('BasicDiagnosticsService', () => {
       expect(summary.highlights[1].detail).toContain('仍未发现稳定 peer')
       expect(summary.highlights[1].detail).toContain('资源侧瓶颈')
       expect(summary.highlights[1].detail).toContain('建议降低速度预期')
+      expect(summary.guidance).toHaveLength(2)
+      expect(summary.guidance[0]).toMatchObject({
+        reason: expect.stringContaining('资源热度较低'),
+        bottleneck: expect.stringContaining('资源侧'),
+        nextStep: expect.stringContaining('降低速度预期')
+      })
+      expect(summary.guidance[1]).toMatchObject({
+        reason: expect.stringContaining('仅有 1 个可用 peer'),
+        bottleneck: expect.stringContaining('资源侧'),
+        nextStep: expect.stringContaining('降低速度预期')
+      })
     } finally {
       vi.useRealTimers()
     }

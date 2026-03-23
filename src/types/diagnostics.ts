@@ -31,6 +31,16 @@ export interface DiagnosticTaskFact {
   zeroSpeedDurationMs?: number
 }
 
+export interface DiagnosticGuidance {
+  id: string
+  title: string
+  taskId?: string
+  reason: string
+  bottleneck: string
+  nextStep: string
+  severity: DiagnosticSeverity
+}
+
 export interface DiagnosticFactsSummary {
   slowTasks: DiagnosticTaskFact[]
   bottlenecks: {
@@ -58,5 +68,6 @@ export interface DiagnosticSummary {
   highlights: DiagnosticHighlight[]
   taskFacts: DiagnosticTaskFact[]
   facts: DiagnosticFactsSummary
+  guidance: DiagnosticGuidance[]
   recentLogs: DiagnosticLogEntry[]
 }

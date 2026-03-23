@@ -16,6 +16,7 @@ import {
   sortTasksForWorkspace,
   type TaskWorkspaceFilter
 } from '../utils/download-task'
+import { TaskGuidancePanel } from './TaskGuidancePanel'
 
 export type TaskAction = 'pause' | 'resume' | 'delete'
 
@@ -364,6 +365,10 @@ export function TaskSection({
                     <strong>{formatSeedersCount(selectedTask.seedersCount)}</strong>
                   </article>
                 </div>
+
+                {selectedTask.facts?.guidance ? (
+                  <TaskGuidancePanel guidance={selectedTask.facts.guidance} />
+                ) : null}
 
                 <dl className="task-detail-grid">
                   <div>
