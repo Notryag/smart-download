@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DownloadTask } from '../../types'
-import { buildTaskGuidance, resolveRuntimeTaskMessage } from './task-utils'
+import { buildResourceHealthScore, buildTaskGuidance, resolveRuntimeTaskMessage } from './task-utils'
 
 function createTask(patch: Partial<DownloadTask> = {}): DownloadTask {
   return {
@@ -89,5 +89,21 @@ describe('resolveRuntimeTaskMessage', () => {
       bottleneck: expect.stringContaining('资源侧'),
       nextStep: expect.stringContaining('降低速度预期')
     })
+  })
+
+  it('scores magnet resource health from current facts', () => {
+    const task = createTask({
+      status: 'downloading',
+      speedBytes: 0,
+      facts: {
+        sourceType: 'magnet',
+        seedersCount: 1,
+        trackerCount: 1,
+        fallbackTrackerCount: 3,
+        zeroSpeedDurationMs: 61_000
+      }
+    })
+
+    expect(buildResourceHealthScore(task)).toBe(25)
   })
 })

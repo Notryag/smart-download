@@ -41,6 +41,7 @@ export interface DownloadTaskFacts {
   zeroSpeedSince?: string
   metadataElapsedMs?: number
   zeroSpeedDurationMs?: number
+  resourceHealthScore?: number
   guidance?: DownloadTaskGuidance
 }
 

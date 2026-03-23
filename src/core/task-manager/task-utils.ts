@@ -8,6 +8,8 @@ import {
 } from '../../types'
 
 const RESTART_RECOVERY_MESSAGE = '应用重启后下载已停止，请手动恢复任务'
+const LONG_METADATA_THRESHOLD_MS = 60_000
+const ZERO_SPEED_THRESHOLD_MS = 60_000
 
 export function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
@@ -107,8 +109,61 @@ function buildMagnetFacts(
     zeroSpeedSince,
     metadataElapsedMs: parseDurationMs(metadataSince, updatedAt),
     zeroSpeedDurationMs: parseDurationMs(zeroSpeedSince, updatedAt),
+    resourceHealthScore: hasFactPatch(patch, 'resourceHealthScore')
+      ? patch.resourceHealthScore
+      : undefined,
     guidance: hasFactPatch(patch, 'guidance') ? patch.guidance : previousFacts?.guidance
   }
+}
+
+function clampResourceHealthScore(score: number): number {
+  return Math.max(0, Math.min(100, score))
+}
+
+export function buildResourceHealthScore(task: DownloadTask): number | undefined {
+  if (task.type !== 'magnet') {
+    return undefined
+  }
+
+  if (typeof task.facts?.resourceHealthScore === 'number') {
+    return task.facts.resourceHealthScore
+  }
+
+  let score = 100
+  const metadataElapsedMs = task.facts?.metadataElapsedMs
+  const zeroSpeedDurationMs = task.facts?.zeroSpeedDurationMs
+  const seedersCount = task.facts?.seedersCount ?? task.seedersCount
+  const trackerCount = task.facts?.trackerCount ?? task.trackerCount
+  const fallbackTrackerCount = task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount
+  const normalizedSeedersCount = seedersCount ?? 0
+  const normalizedTrackerCount = trackerCount ?? 0
+  const normalizedFallbackTrackerCount = fallbackTrackerCount ?? 0
+
+  if (task.status === 'metadata' && (metadataElapsedMs ?? 0) >= LONG_METADATA_THRESHOLD_MS) {
+    score -= 45
+  }
+
+  if (task.status === 'downloading' && (zeroSpeedDurationMs ?? 0) >= ZERO_SPEED_THRESHOLD_MS) {
+    score -= 50
+  }
+
+  if (normalizedSeedersCount <= 0) {
+    score -= 25
+  } else if (normalizedSeedersCount === 1) {
+    score -= 20
+  } else if (normalizedSeedersCount <= 3) {
+    score -= 10
+  }
+
+  if (normalizedTrackerCount <= 1) {
+    score -= 10
+  }
+
+  if (normalizedFallbackTrackerCount > 0 && score < 100) {
+    score += 5
+  }
+
+  return clampResourceHealthScore(score)
 }
 
 function buildFallbackTrackerHint(fallbackTrackerCount: number | undefined): string {
@@ -222,6 +277,7 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
   })
 
   const guidance = buildTaskGuidance(nextTask)
+  const resourceHealthScore = buildResourceHealthScore(nextTask)
 
   return updateTask(nextTask, {
     facts:
@@ -229,6 +285,7 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
         ? buildMagnetFacts(
             nextTask,
             {
+              resourceHealthScore,
               guidance
             },
             nextTask.updatedAt

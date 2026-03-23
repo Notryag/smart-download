@@ -20,7 +20,7 @@
 
 - [x] 将慢速原因、当前瓶颈和下一步建议并入 inspector / diagnostics，优先做规则驱动说明，不直接依赖 AI
 - [ ] 诊断面板
-- [ ] 资源健康评分
+- [x] 资源健康评分
 - [ ] qBittorrent BT adapter
 - [ ] AI 诊断助手
 - [ ] 将任务详情区改造成 inspector，并前置失败原因和操作

@@ -89,6 +89,7 @@ describe('BasicDiagnosticsService', () => {
             sourceType: 'magnet',
             seedersCount: 0,
             trackerCount: 2,
+            resourceHealthScore: 30,
             metadataElapsedMs: 120_000,
             zeroSpeedDurationMs: 120_000
           },
@@ -99,6 +100,7 @@ describe('BasicDiagnosticsService', () => {
             seedersCount: 1,
             trackerCount: 1,
             fallbackTrackerCount: 3,
+            resourceHealthScore: 25,
             zeroSpeedDurationMs: 61_000
           }
         ],
@@ -106,6 +108,16 @@ describe('BasicDiagnosticsService', () => {
           metadataStallCount: 1,
           zeroSpeedCount: 2,
           trackerSparseCount: 1
+        },
+        resourceHealth: {
+          score: 25,
+          level: 'critical',
+          reason: expect.stringContaining('资源侧'),
+          signals: {
+            metadataStallCount: 1,
+            zeroSpeedCount: 2,
+            trackerSparseCount: 1
+          }
         }
       })
       expect(summary.highlights).toHaveLength(2)
@@ -128,5 +140,37 @@ describe('BasicDiagnosticsService', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('keeps a healthy score when magnet resource signals stay stable', async () => {
+    const service = new BasicDiagnosticsService(createAdapter())
+    const tasks = [
+      createTask({
+        id: 'task-healthy',
+        status: 'downloading',
+        speedBytes: 2048,
+        downloadedBytes: 1024,
+        progress: 0.4,
+        facts: {
+          sourceType: 'magnet',
+          seedersCount: 8,
+          trackerCount: 5,
+          fallbackTrackerCount: 2,
+          resourceHealthScore: 95
+        }
+      })
+    ]
+
+    const summary = await service.getSummary(tasks as DownloadTask[], [])
+
+    expect(summary.taskFacts[0]).toMatchObject({
+      taskId: 'task-healthy',
+      resourceHealthScore: 95
+    })
+    expect(summary.facts.resourceHealth).toMatchObject({
+      score: 95,
+      level: 'healthy',
+      reason: expect.stringContaining('资源侧信号稳定')
+    })
   })
 })

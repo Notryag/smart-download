@@ -85,6 +85,16 @@ function createDiagnostics(): DownloadDashboardSnapshot['diagnostics'] {
         metadataStallCount: 0,
         zeroSpeedCount: 0,
         trackerSparseCount: 0
+      },
+      resourceHealth: {
+        score: 100,
+        level: 'healthy',
+        reason: '当前没有发现明显的资源侧瓶颈。',
+        signals: {
+          metadataStallCount: 0,
+          zeroSpeedCount: 0,
+          trackerSparseCount: 0
+        }
       }
     },
     guidance: [],
@@ -327,6 +337,7 @@ describe('registerDownloadTaskIpc', () => {
         sourceType: 'magnet',
         seedersCount: 0,
         trackerCount: 2,
+        resourceHealthScore: 30,
         metadataElapsedMs: 120_000,
         zeroSpeedDurationMs: 120_000
       }
@@ -341,10 +352,21 @@ describe('registerDownloadTaskIpc', () => {
             sourceType: 'magnet',
             seedersCount: 0,
             trackerCount: 2,
+            resourceHealthScore: 30,
             metadataElapsedMs: 120_000,
             zeroSpeedDurationMs: 120_000
           }
-        ]
+        ],
+        resourceHealth: {
+          score: 30,
+          level: 'critical',
+          reason: '当前资源侧信号偏弱，建议降低速度预期。',
+          signals: {
+            metadataStallCount: 1,
+            zeroSpeedCount: 1,
+            trackerSparseCount: 0
+          }
+        }
       }
     }
 
@@ -364,6 +386,7 @@ describe('registerDownloadTaskIpc', () => {
       sourceType: 'magnet',
       seedersCount: 0,
       trackerCount: 2,
+      resourceHealthScore: 30,
       metadataElapsedMs: 120_000,
       zeroSpeedDurationMs: 120_000
     })
@@ -374,10 +397,15 @@ describe('registerDownloadTaskIpc', () => {
           sourceType: 'magnet',
           seedersCount: 0,
           trackerCount: 2,
+          resourceHealthScore: 30,
           metadataElapsedMs: 120_000,
           zeroSpeedDurationMs: 120_000
         }
-      ]
+      ],
+      resourceHealth: {
+        score: 30,
+        level: 'critical'
+      }
     })
     expect(activeWindow.webContents.send).not.toHaveBeenCalled()
   })

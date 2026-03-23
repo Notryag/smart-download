@@ -1,6 +1,7 @@
 import type { DownloadTaskStatus, DownloadTaskType } from './download-task'
 
 export type DiagnosticSeverity = 'info' | 'warning' | 'error'
+export type DiagnosticResourceHealthLevel = 'healthy' | 'degraded' | 'critical'
 
 export interface DiagnosticHighlight {
   id: string
@@ -29,6 +30,7 @@ export interface DiagnosticTaskFact {
   fallbackTrackerCount?: number
   metadataElapsedMs?: number
   zeroSpeedDurationMs?: number
+  resourceHealthScore?: number
 }
 
 export interface DiagnosticGuidance {
@@ -47,6 +49,16 @@ export interface DiagnosticFactsSummary {
     metadataStallCount: number
     zeroSpeedCount: number
     trackerSparseCount: number
+  }
+  resourceHealth: {
+    score: number
+    level: DiagnosticResourceHealthLevel
+    reason: string
+    signals: {
+      metadataStallCount: number
+      zeroSpeedCount: number
+      trackerSparseCount: number
+    }
   }
 }
 

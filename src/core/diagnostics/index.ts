@@ -1,15 +1,15 @@
 import type {
   DownloadTask,
+  DiagnosticFactsSummary,
   DiagnosticGuidance,
   DiagnosticHighlight,
   DiagnosticLogEntry,
-  DiagnosticFactsSummary,
   DiagnosticSummary,
   DiagnosticTaskFact
 } from '../../types'
 import type { DownloadAdapter } from '../../adapters'
 import type { LogEntry } from '../logger'
-import { buildTaskGuidance } from '../task-manager/task-utils'
+import { buildResourceHealthScore, buildTaskGuidance } from '../task-manager/task-utils'
 
 const LONG_METADATA_THRESHOLD_MS = 60_000
 const ZERO_SPEED_THRESHOLD_MS = 60_000
@@ -79,7 +79,8 @@ function buildTaskFact(task: DownloadTask, checkedAt: number): DiagnosticTaskFac
     trackerCount: task.facts?.trackerCount ?? task.trackerCount,
     fallbackTrackerCount: task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount,
     metadataElapsedMs,
-    zeroSpeedDurationMs
+    zeroSpeedDurationMs,
+    resourceHealthScore: task.facts?.resourceHealthScore ?? buildResourceHealthScore(task)
   }
 }
 
@@ -152,18 +153,36 @@ function buildActiveTaskHighlights(taskFacts: DiagnosticTaskFact[]): DiagnosticH
 }
 
 function buildDiagnosticFacts(taskFacts: DiagnosticTaskFact[]): DiagnosticFactsSummary {
+  const signals = {
+    metadataStallCount: taskFacts.filter(
+      (fact) => fact.status === 'metadata' && (fact.metadataElapsedMs ?? 0) >= LONG_METADATA_THRESHOLD_MS
+    ).length,
+    zeroSpeedCount: taskFacts.filter(
+      (fact) =>
+        ['metadata', 'downloading'].includes(fact.status) &&
+        (fact.zeroSpeedDurationMs ?? 0) >= ZERO_SPEED_THRESHOLD_MS
+    ).length,
+    trackerSparseCount: taskFacts.filter((fact) => (fact.trackerCount ?? 0) <= 1).length
+  }
+  const score = taskFacts.length
+    ? Math.min(...taskFacts.map((fact) => fact.resourceHealthScore ?? 100))
+    : 100
+  const level = score >= 80 ? 'healthy' : score >= 40 ? 'degraded' : 'critical'
+  const reason =
+    level === 'healthy'
+      ? '当前资源侧信号稳定，未发现明显的资源侧瓶颈。'
+      : level === 'degraded'
+        ? '当前资源侧信号开始走弱，建议继续观察 peer 与 tracker 变化。'
+        : '当前资源侧信号偏弱，持续 0 速度或 peer 稀缺更可能是主要瓶颈。'
+
   return {
     slowTasks: taskFacts,
-    bottlenecks: {
-      metadataStallCount: taskFacts.filter(
-        (fact) => fact.status === 'metadata' && (fact.metadataElapsedMs ?? 0) >= LONG_METADATA_THRESHOLD_MS
-      ).length,
-      zeroSpeedCount: taskFacts.filter(
-        (fact) =>
-          ['metadata', 'downloading'].includes(fact.status) &&
-          (fact.zeroSpeedDurationMs ?? 0) >= ZERO_SPEED_THRESHOLD_MS
-      ).length,
-      trackerSparseCount: taskFacts.filter((fact) => (fact.trackerCount ?? 0) <= 1).length
+    bottlenecks: signals,
+    resourceHealth: {
+      score,
+      level,
+      reason,
+      signals
     }
   }
 }
