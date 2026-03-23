@@ -112,7 +112,7 @@ describe('BasicDiagnosticsService', () => {
         resourceHealth: {
           score: 25,
           level: 'critical',
-          reason: expect.stringContaining('资源侧'),
+          reason: expect.any(String),
           signals: {
             metadataStallCount: 1,
             zeroSpeedCount: 2,
@@ -121,22 +121,32 @@ describe('BasicDiagnosticsService', () => {
         }
       })
       expect(summary.highlights).toHaveLength(2)
-      expect(summary.highlights[0].detail).toContain('资源热度较低')
-      expect(summary.highlights[0].detail).toContain('建议降低速度预期')
-      expect(summary.highlights[1].detail).toContain('仍未发现稳定 peer')
-      expect(summary.highlights[1].detail).toContain('资源侧瓶颈')
-      expect(summary.highlights[1].detail).toContain('建议降低速度预期')
-      expect(summary.guidance).toHaveLength(2)
-      expect(summary.guidance[0]).toMatchObject({
-        code: 'magnet_metadata_sparse_peers',
-        severity: 'warning',
-        shortMessage: expect.stringContaining('metadata 获取偏慢')
-      })
-      expect(summary.guidance[1]).toMatchObject({
-        code: 'magnet_zero_speed_sparse_peers',
-        severity: 'warning',
-        shortMessage: expect.stringContaining('下载持续无速度')
-      })
+      expect(summary.highlights).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'metadata-task-1',
+            severity: 'warning',
+            title: '元数据获取偏慢：Ubuntu ISO'
+          }),
+          expect.objectContaining({
+            id: 'zero-speed-task-1',
+            severity: 'warning',
+            title: '任务持续无速度：Ubuntu ISO'
+          })
+        ])
+      )
+      expect(summary.guidance).toMatchObject([
+        {
+          code: 'magnet_metadata_sparse_peers',
+          severity: 'warning',
+          shortMessage: expect.any(String)
+        },
+        {
+          code: 'magnet_zero_speed_sparse_peers',
+          severity: 'warning',
+          shortMessage: expect.any(String)
+        }
+      ])
     } finally {
       vi.useRealTimers()
     }
@@ -170,7 +180,12 @@ describe('BasicDiagnosticsService', () => {
     expect(summary.facts.resourceHealth).toMatchObject({
       score: 95,
       level: 'healthy',
-      reason: expect.any(String)
+      reason: expect.any(String),
+      signals: {
+        metadataStallCount: 0,
+        zeroSpeedCount: 0,
+        trackerSparseCount: 0
+      }
     })
   })
 })

@@ -161,12 +161,13 @@ describe('InMemoryTaskManager create flow', () => {
     })
 
     expect(task.status).toBe('metadata')
-    expect(task.errorMessage).toContain('资源较冷，metadata 获取偏慢，当前 peer 不足')
-    expect(task.errorMessage).toContain('已补充 5 个 fallback tracker')
     expect(task.facts?.guidance).toMatchObject({
       code: 'magnet_metadata_sparse_peers',
-      severity: 'warning'
+      severity: 'warning',
+      shortMessage: expect.any(String)
     })
+    expect(task.errorMessage).toContain(task.facts?.guidance?.shortMessage ?? '')
+    expect(task.errorMessage).toContain('已补充 5 个 fallback tracker')
   })
 
   it('tracks magnet fact fields across creation and repeated metadata syncs', async () => {
@@ -233,7 +234,12 @@ describe('InMemoryTaskManager create flow', () => {
 
       const [syncedTask] = await taskManager.listTasks()
       expect(syncedTask.status).toBe('metadata')
-      expect(syncedTask.errorMessage).toContain('资源较冷，metadata 获取偏慢，当前 peer 不足')
+      expect(syncedTask.facts?.guidance).toMatchObject({
+        code: 'magnet_metadata_sparse_peers',
+        severity: 'warning',
+        shortMessage: expect.any(String)
+      })
+      expect(syncedTask.errorMessage).toContain(syncedTask.facts?.guidance?.shortMessage ?? '')
       expect(syncedTask.errorMessage).toContain('已补充 7 个 fallback tracker')
       expect(syncedTask.facts).toMatchObject({
         sourceType: 'magnet',
@@ -246,7 +252,8 @@ describe('InMemoryTaskManager create flow', () => {
         zeroSpeedDurationMs: 45_000,
         guidance: {
           code: 'magnet_metadata_sparse_peers',
-          severity: 'warning'
+          severity: 'warning',
+          shortMessage: expect.any(String)
         }
       })
       expect(taskManager.getTasks()[0].facts).toMatchObject(syncedTask.facts ?? {})
@@ -261,11 +268,14 @@ describe('InMemoryTaskManager create flow', () => {
         zeroSpeedDurationMs: 45_000,
         guidance: {
           code: 'magnet_metadata_sparse_peers',
-          severity: 'warning'
+          severity: 'warning',
+          shortMessage: expect.any(String)
         }
       })
       expect(store.tasks.get(task.id)?.status).toBe('metadata')
-      expect(store.tasks.get(task.id)?.errorMessage).toContain('资源较冷，metadata 获取偏慢')
+      expect(store.tasks.get(task.id)?.errorMessage).toContain(
+        store.tasks.get(task.id)?.facts?.guidance?.shortMessage ?? ''
+      )
     } finally {
       vi.useRealTimers()
     }

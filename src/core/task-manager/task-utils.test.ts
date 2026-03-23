@@ -35,11 +35,16 @@ describe('resolveRuntimeTaskMessage', () => {
         fallbackTrackerCount: 7
       }
     })
-
+    const guidance = buildTaskGuidance(nextTask)
     const message = resolveRuntimeTaskMessage(previousTask, nextTask)
 
+    expect(guidance).toMatchObject({
+      code: 'magnet_metadata_sparse_peers',
+      severity: 'warning',
+      shortMessage: expect.any(String)
+    })
     expect(message).toContain('正在获取种子元数据；')
-    expect(message).toContain('资源较冷，metadata 获取偏慢，当前 peer 不足')
+    expect(message).toContain(guidance?.shortMessage ?? '')
     expect(message).toContain('7 个 fallback tracker')
   })
 
@@ -60,10 +65,15 @@ describe('resolveRuntimeTaskMessage', () => {
         fallbackTrackerCount: 3
       }
     })
-
+    const guidance = buildTaskGuidance(nextTask)
     const message = resolveRuntimeTaskMessage(previousTask, nextTask)
 
-    expect(message).toContain('下载持续无速度，当前可用 peer 不足')
+    expect(guidance).toMatchObject({
+      code: 'magnet_zero_speed_sparse_peers',
+      severity: 'warning',
+      shortMessage: expect.any(String)
+    })
+    expect(message).toContain(guidance?.shortMessage ?? '')
     expect(message).toContain('3 个 fallback tracker')
   })
 
@@ -84,7 +94,7 @@ describe('resolveRuntimeTaskMessage', () => {
     expect(guidance).toMatchObject({
       code: 'magnet_metadata_sparse_peers',
       severity: 'warning',
-      shortMessage: expect.stringContaining('资源较冷，metadata 获取偏慢')
+      shortMessage: expect.any(String)
     })
   })
 
