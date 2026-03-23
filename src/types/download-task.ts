@@ -23,6 +23,16 @@ export const DOWNLOAD_TASK_GUIDANCE_CODES = [
   'magnet_metadata_sparse_peers',
   'magnet_zero_speed_sparse_peers'
 ] as const
+export const DOWNLOAD_TASK_RESOURCE_HEALTH_LEVELS = ['healthy', 'degraded', 'critical'] as const
+export const DOWNLOAD_TASK_BOTTLENECK_CODES = [
+  'none',
+  'peer_sparse',
+  'metadata_stall',
+  'zero_speed_stall',
+  'tracker_sparse'
+] as const
+export const DOWNLOAD_TASK_PEER_AVAILABILITIES = ['none', 'scarce', 'limited', 'good'] as const
+export const DOWNLOAD_TASK_TRACKER_HEALTH_STATES = ['none', 'sparse', 'normal'] as const
 
 export interface CreateDownloadTaskInput {
   source: string
@@ -32,6 +42,10 @@ export interface CreateDownloadTaskInput {
 
 export type DownloadTaskGuidanceCode = (typeof DOWNLOAD_TASK_GUIDANCE_CODES)[number]
 export type GuidanceSeverity = 'info' | 'warning' | 'error'
+export type DownloadTaskResourceHealthLevel = (typeof DOWNLOAD_TASK_RESOURCE_HEALTH_LEVELS)[number]
+export type DownloadTaskBottleneckCode = (typeof DOWNLOAD_TASK_BOTTLENECK_CODES)[number]
+export type DownloadTaskPeerAvailability = (typeof DOWNLOAD_TASK_PEER_AVAILABILITIES)[number]
+export type DownloadTaskTrackerHealth = (typeof DOWNLOAD_TASK_TRACKER_HEALTH_STATES)[number]
 
 export interface DownloadTaskGuidance {
   code: DownloadTaskGuidanceCode
@@ -52,6 +66,10 @@ export interface DownloadTaskFacts {
   metadataElapsedMs?: number
   zeroSpeedDurationMs?: number
   resourceHealthScore?: number
+  resourceHealthLevel?: DownloadTaskResourceHealthLevel
+  bottleneckCode?: DownloadTaskBottleneckCode
+  peerAvailability?: DownloadTaskPeerAvailability
+  trackerHealth?: DownloadTaskTrackerHealth
   guidance?: DownloadTaskGuidance
 }
 

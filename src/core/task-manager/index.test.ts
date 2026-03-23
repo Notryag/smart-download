@@ -227,7 +227,12 @@ describe('InMemoryTaskManager create flow', () => {
         metadataSince: '2026-03-21T12:00:00.000Z',
         zeroSpeedSince: '2026-03-21T12:00:00.000Z',
         metadataElapsedMs: 0,
-        zeroSpeedDurationMs: 0
+        zeroSpeedDurationMs: 0,
+        resourceHealthScore: 80,
+        resourceHealthLevel: 'healthy',
+        bottleneckCode: 'peer_sparse',
+        peerAvailability: 'none',
+        trackerHealth: 'normal'
       })
 
       vi.setSystemTime(new Date('2026-03-21T12:00:45.000Z'))
@@ -250,6 +255,11 @@ describe('InMemoryTaskManager create flow', () => {
         zeroSpeedSince: '2026-03-21T12:00:00.000Z',
         metadataElapsedMs: 45_000,
         zeroSpeedDurationMs: 45_000,
+        resourceHealthScore: 80,
+        resourceHealthLevel: 'healthy',
+        bottleneckCode: 'peer_sparse',
+        peerAvailability: 'none',
+        trackerHealth: 'normal',
         guidance: {
           code: 'magnet_metadata_sparse_peers',
           severity: 'warning',
@@ -266,6 +276,11 @@ describe('InMemoryTaskManager create flow', () => {
         zeroSpeedSince: '2026-03-21T12:00:00.000Z',
         metadataElapsedMs: 45_000,
         zeroSpeedDurationMs: 45_000,
+        resourceHealthScore: 80,
+        resourceHealthLevel: 'healthy',
+        bottleneckCode: 'peer_sparse',
+        peerAvailability: 'none',
+        trackerHealth: 'normal',
         guidance: {
           code: 'magnet_metadata_sparse_peers',
           severity: 'warning',

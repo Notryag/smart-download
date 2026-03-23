@@ -90,6 +90,10 @@ describe('BasicDiagnosticsService', () => {
             seedersCount: 0,
             trackerCount: 2,
             resourceHealthScore: 30,
+            resourceHealthLevel: 'critical',
+            bottleneckCode: 'metadata_stall',
+            peerAvailability: 'none',
+            trackerHealth: 'normal',
             metadataElapsedMs: 120_000,
             zeroSpeedDurationMs: 120_000
           },
@@ -101,21 +105,28 @@ describe('BasicDiagnosticsService', () => {
             trackerCount: 1,
             fallbackTrackerCount: 3,
             resourceHealthScore: 25,
+            resourceHealthLevel: 'critical',
+            bottleneckCode: 'zero_speed_stall',
+            peerAvailability: 'scarce',
+            trackerHealth: 'sparse',
             zeroSpeedDurationMs: 61_000
           }
         ],
         bottlenecks: {
           metadataStallCount: 1,
           zeroSpeedCount: 2,
+          peerSparseCount: 2,
           trackerSparseCount: 1
         },
         resourceHealth: {
           score: 25,
           level: 'critical',
           reason: expect.any(String),
+          dominantBottleneckCode: 'zero_speed_stall',
           signals: {
             metadataStallCount: 1,
             zeroSpeedCount: 2,
+            peerSparseCount: 2,
             trackerSparseCount: 1
           }
         }
@@ -175,15 +186,21 @@ describe('BasicDiagnosticsService', () => {
 
     expect(summary.taskFacts[0]).toMatchObject({
       taskId: 'task-healthy',
-      resourceHealthScore: 95
+      resourceHealthScore: 95,
+      resourceHealthLevel: 'healthy',
+      bottleneckCode: 'none',
+      peerAvailability: 'good',
+      trackerHealth: 'normal'
     })
     expect(summary.facts.resourceHealth).toMatchObject({
       score: 95,
       level: 'healthy',
       reason: expect.any(String),
+      dominantBottleneckCode: 'none',
       signals: {
         metadataStallCount: 0,
         zeroSpeedCount: 0,
+        peerSparseCount: 0,
         trackerSparseCount: 0
       }
     })

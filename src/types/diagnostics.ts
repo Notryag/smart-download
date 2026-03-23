@@ -1,12 +1,16 @@
 import type {
+  DownloadTaskBottleneckCode,
   DownloadTaskGuidanceCode,
+  DownloadTaskPeerAvailability,
+  DownloadTaskResourceHealthLevel,
   DownloadTaskStatus,
+  DownloadTaskTrackerHealth,
   DownloadTaskType,
   GuidanceSeverity
 } from './download-task'
 
 export type DiagnosticSeverity = GuidanceSeverity
-export type DiagnosticResourceHealthLevel = 'healthy' | 'degraded' | 'critical'
+export type DiagnosticResourceHealthLevel = DownloadTaskResourceHealthLevel
 
 export interface DiagnosticHighlight {
   id: string
@@ -36,6 +40,10 @@ export interface DiagnosticTaskFact {
   metadataElapsedMs?: number
   zeroSpeedDurationMs?: number
   resourceHealthScore?: number
+  resourceHealthLevel?: DownloadTaskResourceHealthLevel
+  bottleneckCode?: DownloadTaskBottleneckCode
+  peerAvailability?: DownloadTaskPeerAvailability
+  trackerHealth?: DownloadTaskTrackerHealth
 }
 
 export interface DiagnosticGuidance {
@@ -55,15 +63,18 @@ export interface DiagnosticFactsSummary {
   bottlenecks: {
     metadataStallCount: number
     zeroSpeedCount: number
+    peerSparseCount: number
     trackerSparseCount: number
   }
   resourceHealth: {
     score: number
     level: DiagnosticResourceHealthLevel
     reason: string
+    dominantBottleneckCode: DownloadTaskBottleneckCode
     signals: {
       metadataStallCount: number
       zeroSpeedCount: number
+      peerSparseCount: number
       trackerSparseCount: number
     }
   }

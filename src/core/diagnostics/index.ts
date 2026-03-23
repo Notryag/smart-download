@@ -1,5 +1,6 @@
 import type {
   DownloadTask,
+  DownloadTaskBottleneckCode,
   DiagnosticFactsSummary,
   DiagnosticGuidance,
   DiagnosticHighlight,
@@ -9,7 +10,14 @@ import type {
 } from '../../types'
 import type { DownloadAdapter } from '../../adapters'
 import type { LogEntry } from '../logger'
-import { buildResourceHealthScore, buildTaskGuidance } from '../task-manager/task-utils'
+import {
+  buildBottleneckCode,
+  buildPeerAvailability,
+  buildResourceHealthLevel,
+  buildResourceHealthScore,
+  buildTaskGuidance,
+  buildTrackerHealth
+} from '../task-manager/task-utils'
 
 const LONG_METADATA_THRESHOLD_MS = 60_000
 const ZERO_SPEED_THRESHOLD_MS = 60_000
@@ -80,7 +88,15 @@ function buildTaskFact(task: DownloadTask, checkedAt: number): DiagnosticTaskFac
     fallbackTrackerCount: task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount,
     metadataElapsedMs,
     zeroSpeedDurationMs,
-    resourceHealthScore: task.facts?.resourceHealthScore ?? buildResourceHealthScore(task)
+    resourceHealthScore: task.facts?.resourceHealthScore ?? buildResourceHealthScore(task),
+    resourceHealthLevel:
+      task.facts?.resourceHealthLevel ??
+      buildResourceHealthLevel(task.facts?.resourceHealthScore ?? buildResourceHealthScore(task)),
+    bottleneckCode: task.facts?.bottleneckCode ?? buildBottleneckCode(task),
+    peerAvailability:
+      task.facts?.peerAvailability ?? buildPeerAvailability(task.facts?.seedersCount ?? task.seedersCount),
+    trackerHealth:
+      task.facts?.trackerHealth ?? buildTrackerHealth(task.facts?.trackerCount ?? task.trackerCount)
   }
 }
 
@@ -162,12 +178,15 @@ function buildDiagnosticFacts(taskFacts: DiagnosticTaskFact[]): DiagnosticFactsS
         ['metadata', 'downloading'].includes(fact.status) &&
         (fact.zeroSpeedDurationMs ?? 0) >= ZERO_SPEED_THRESHOLD_MS
     ).length,
+    peerSparseCount: taskFacts.filter((fact) => ['none', 'scarce'].includes(fact.peerAvailability ?? 'none'))
+      .length,
     trackerSparseCount: taskFacts.filter((fact) => (fact.trackerCount ?? 0) <= 1).length
   }
   const score = taskFacts.length
     ? Math.min(...taskFacts.map((fact) => fact.resourceHealthScore ?? 100))
     : 100
   const level = score >= 80 ? 'healthy' : score >= 40 ? 'degraded' : 'critical'
+  const dominantBottleneckCode = resolveDominantBottleneckCode(signals)
   const reason =
     level === 'healthy'
       ? '当前资源侧信号稳定，未发现明显的资源侧瓶颈。'
@@ -182,9 +201,32 @@ function buildDiagnosticFacts(taskFacts: DiagnosticTaskFact[]): DiagnosticFactsS
       score,
       level,
       reason,
+      dominantBottleneckCode,
       signals
     }
   }
+}
+
+function resolveDominantBottleneckCode(
+  signals: DiagnosticFactsSummary['bottlenecks']
+): DownloadTaskBottleneckCode {
+  if (signals.zeroSpeedCount > 0) {
+    return 'zero_speed_stall'
+  }
+
+  if (signals.metadataStallCount > 0) {
+    return 'metadata_stall'
+  }
+
+  if (signals.peerSparseCount > 0) {
+    return 'peer_sparse'
+  }
+
+  if (signals.trackerSparseCount > 0) {
+    return 'tracker_sparse'
+  }
+
+  return 'none'
 }
 
 function buildDiagnosticGuidance(tasks: DownloadTask[]): DiagnosticGuidance[] {

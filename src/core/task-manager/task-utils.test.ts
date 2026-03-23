@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DownloadTask } from '../../types'
-import { buildResourceHealthScore, buildTaskGuidance, resolveRuntimeTaskMessage } from './task-utils'
+import {
+  buildBottleneckCode,
+  buildPeerAvailability,
+  buildResourceHealthLevel,
+  buildResourceHealthScore,
+  buildTaskGuidance,
+  buildTrackerHealth,
+  resolveRuntimeTaskMessage
+} from './task-utils'
 
 function createTask(patch: Partial<DownloadTask> = {}): DownloadTask {
   return {
@@ -112,5 +120,47 @@ describe('resolveRuntimeTaskMessage', () => {
     })
 
     expect(buildResourceHealthScore(task)).toBe(25)
+    expect(buildResourceHealthLevel(buildResourceHealthScore(task))).toBe('critical')
+    expect(buildBottleneckCode(task)).toBe('zero_speed_stall')
+    expect(buildPeerAvailability(task.facts?.seedersCount)).toBe('scarce')
+    expect(buildTrackerHealth(task.facts?.trackerCount)).toBe('sparse')
+  })
+
+  it('classifies metadata tasks with no peers as resource-side bottlenecks', () => {
+    const task = createTask({
+      status: 'metadata',
+      facts: {
+        sourceType: 'magnet',
+        seedersCount: 0,
+        trackerCount: 2,
+        metadataElapsedMs: 120_000
+      }
+    })
+
+    expect(buildResourceHealthScore(task)).toBe(30)
+    expect(buildResourceHealthLevel(buildResourceHealthScore(task))).toBe('critical')
+    expect(buildBottleneckCode(task)).toBe('metadata_stall')
+    expect(buildPeerAvailability(task.facts?.seedersCount)).toBe('none')
+    expect(buildTrackerHealth(task.facts?.trackerCount)).toBe('normal')
+  })
+
+  it('keeps healthy resources readable through structured fields', () => {
+    const task = createTask({
+      status: 'downloading',
+      speedBytes: 2_048,
+      downloadedBytes: 1_024,
+      facts: {
+        sourceType: 'magnet',
+        seedersCount: 8,
+        trackerCount: 4,
+        fallbackTrackerCount: 2
+      }
+    })
+
+    expect(buildResourceHealthScore(task)).toBe(100)
+    expect(buildResourceHealthLevel(buildResourceHealthScore(task))).toBe('healthy')
+    expect(buildBottleneckCode(task)).toBe('none')
+    expect(buildPeerAvailability(task.facts?.seedersCount)).toBe('good')
+    expect(buildTrackerHealth(task.facts?.trackerCount)).toBe('normal')
   })
 })

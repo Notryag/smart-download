@@ -22,7 +22,7 @@
 - [x] 资源健康评分
 - [x] 将 guidance 收口为 `code + severity + shortMessage`，减少长中文说明
 - [x] 将测试从中文文案断言切到 `code / score / level`
-- [ ] 继续补 magnet 结构化诊断字段，确保 AI 后续能直接读取现状
+- [x] 继续补 magnet 结构化诊断字段，确保 AI 后续能直接读取现状
 - [ ] 诊断面板
 - [ ] 将任务详情区改造成 inspector，并前置失败原因和操作
 - [ ] 将 Header 继续收口为命令栏，进一步弱化说明文案

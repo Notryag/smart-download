@@ -6,10 +6,15 @@ import {
   type DownloadTaskFacts,
   type DownloadTaskGuidance
 } from '../../types'
+import {
+  buildBottleneckCode,
+  buildPeerAvailability,
+  buildResourceHealthLevel,
+  buildResourceHealthScore,
+  buildTrackerHealth
+} from './task-facts'
 
 const RESTART_RECOVERY_MESSAGE = '应用重启后下载已停止，请手动恢复任务'
-const LONG_METADATA_THRESHOLD_MS = 60_000
-const ZERO_SPEED_THRESHOLD_MS = 60_000
 
 export function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
@@ -17,11 +22,9 @@ export function getErrorMessage(error: unknown, fallback: string): string {
 
 function buildTaskName(input: CreateDownloadTaskInput): string {
   const trimmedName = input.name?.trim()
-
   if (trimmedName) {
     return trimmedName
   }
-
   return 'Download Task'
 }
 
@@ -57,14 +60,11 @@ function parseDurationMs(from: string | undefined, to: string): number | undefin
   if (!from) {
     return undefined
   }
-
   const startedAt = Date.parse(from)
   const endedAt = Date.parse(to)
-
   if (Number.isNaN(startedAt) || Number.isNaN(endedAt)) {
     return undefined
   }
-
   return Math.max(endedAt - startedAt, 0)
 }
 
@@ -112,59 +112,23 @@ function buildMagnetFacts(
     resourceHealthScore: hasFactPatch(patch, 'resourceHealthScore')
       ? patch.resourceHealthScore
       : undefined,
+    resourceHealthLevel: hasFactPatch(patch, 'resourceHealthLevel')
+      ? patch.resourceHealthLevel
+      : undefined,
+    bottleneckCode: hasFactPatch(patch, 'bottleneckCode') ? patch.bottleneckCode : undefined,
+    peerAvailability: hasFactPatch(patch, 'peerAvailability') ? patch.peerAvailability : undefined,
+    trackerHealth: hasFactPatch(patch, 'trackerHealth') ? patch.trackerHealth : undefined,
     guidance: hasFactPatch(patch, 'guidance') ? patch.guidance : previousFacts?.guidance
   }
 }
 
-function clampResourceHealthScore(score: number): number {
-  return Math.max(0, Math.min(100, score))
-}
-
-export function buildResourceHealthScore(task: DownloadTask): number | undefined {
-  if (task.type !== 'magnet') {
-    return undefined
-  }
-
-  if (typeof task.facts?.resourceHealthScore === 'number') {
-    return task.facts.resourceHealthScore
-  }
-
-  let score = 100
-  const metadataElapsedMs = task.facts?.metadataElapsedMs
-  const zeroSpeedDurationMs = task.facts?.zeroSpeedDurationMs
-  const seedersCount = task.facts?.seedersCount ?? task.seedersCount
-  const trackerCount = task.facts?.trackerCount ?? task.trackerCount
-  const fallbackTrackerCount = task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount
-  const normalizedSeedersCount = seedersCount ?? 0
-  const normalizedTrackerCount = trackerCount ?? 0
-  const normalizedFallbackTrackerCount = fallbackTrackerCount ?? 0
-
-  if (task.status === 'metadata' && (metadataElapsedMs ?? 0) >= LONG_METADATA_THRESHOLD_MS) {
-    score -= 45
-  }
-
-  if (task.status === 'downloading' && (zeroSpeedDurationMs ?? 0) >= ZERO_SPEED_THRESHOLD_MS) {
-    score -= 50
-  }
-
-  if (normalizedSeedersCount <= 0) {
-    score -= 25
-  } else if (normalizedSeedersCount === 1) {
-    score -= 20
-  } else if (normalizedSeedersCount <= 3) {
-    score -= 10
-  }
-
-  if (normalizedTrackerCount <= 1) {
-    score -= 10
-  }
-
-  if (normalizedFallbackTrackerCount > 0 && score < 100) {
-    score += 5
-  }
-
-  return clampResourceHealthScore(score)
-}
+export {
+  buildBottleneckCode,
+  buildPeerAvailability,
+  buildResourceHealthLevel,
+  buildResourceHealthScore,
+  buildTrackerHealth
+} from './task-facts'
 
 function buildFallbackTrackerHint(fallbackTrackerCount: number | undefined): string {
   if (!fallbackTrackerCount || fallbackTrackerCount <= 0) {
@@ -304,6 +268,10 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
 
   const guidance = buildTaskGuidance(nextTask)
   const resourceHealthScore = buildResourceHealthScore(nextTask)
+  const resourceHealthLevel = buildResourceHealthLevel(resourceHealthScore)
+  const peerAvailability = buildPeerAvailability(nextTask.facts?.seedersCount ?? nextTask.seedersCount)
+  const trackerHealth = buildTrackerHealth(nextTask.facts?.trackerCount ?? nextTask.trackerCount)
+  const bottleneckCode = buildBottleneckCode(nextTask)
 
   return updateTask(nextTask, {
     facts:
@@ -312,6 +280,10 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
             nextTask,
             {
               resourceHealthScore,
+              resourceHealthLevel,
+              bottleneckCode,
+              peerAvailability,
+              trackerHealth,
               guidance
             },
             nextTask.updatedAt

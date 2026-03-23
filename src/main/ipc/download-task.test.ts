@@ -84,15 +84,18 @@ function createDiagnostics(): DownloadDashboardSnapshot['diagnostics'] {
       bottlenecks: {
         metadataStallCount: 0,
         zeroSpeedCount: 0,
+        peerSparseCount: 0,
         trackerSparseCount: 0
       },
       resourceHealth: {
         score: 100,
         level: 'healthy',
         reason: '当前没有发现明显的资源侧瓶颈。',
+        dominantBottleneckCode: 'none',
         signals: {
           metadataStallCount: 0,
           zeroSpeedCount: 0,
+          peerSparseCount: 0,
           trackerSparseCount: 0
         }
       }
@@ -180,6 +183,59 @@ function registerHarness(harness: ReturnType<typeof createHarness>): void {
   )
 }
 
+function createStructuredDiagnosticsSnapshot(task: DownloadTask): DownloadDashboardSnapshot['diagnostics'] {
+  return {
+    ...createDiagnostics(),
+    facts: {
+      slowTasks: [
+        {
+          taskId: task.id,
+          taskName: task.name,
+          sourceType: 'magnet',
+          status: task.status,
+          seedersCount: 0,
+          trackerCount: 2,
+          resourceHealthScore: 30,
+          resourceHealthLevel: 'critical',
+          bottleneckCode: 'metadata_stall',
+          peerAvailability: 'none',
+          trackerHealth: 'normal',
+          metadataElapsedMs: 120_000,
+          zeroSpeedDurationMs: 120_000
+        }
+      ],
+      bottlenecks: {
+        metadataStallCount: 1,
+        zeroSpeedCount: 1,
+        peerSparseCount: 1,
+        trackerSparseCount: 0
+      },
+      resourceHealth: {
+        score: 30,
+        level: 'critical',
+        reason: '当前资源侧信号偏弱，建议降低速度预期。',
+        dominantBottleneckCode: 'metadata_stall',
+        signals: {
+          metadataStallCount: 1,
+          zeroSpeedCount: 1,
+          peerSparseCount: 1,
+          trackerSparseCount: 0
+        }
+      }
+    },
+    guidance: [
+      {
+        id: `guidance-${task.id}`,
+        title: task.name,
+        taskId: task.id,
+        code: 'magnet_metadata_sparse_peers',
+        severity: 'warning',
+        shortMessage: '资源较冷，metadata 获取偏慢，当前 peer 不足。'
+      }
+    ]
+  }
+}
+
 describe('registerDownloadTaskIpc', () => {
   let intervalCallback: (() => void) | undefined
   let intervalUnref: ReturnType<typeof vi.fn>
@@ -228,7 +284,6 @@ describe('registerDownloadTaskIpc', () => {
     expect(destroyedWindow.webContents.send).not.toHaveBeenCalled()
     expect(intervalUnref).toHaveBeenCalledOnce()
   })
-
   it('returns the current dashboard snapshot from the dashboard handler', async () => {
     const harness = createHarness()
 
@@ -245,7 +300,6 @@ describe('registerDownloadTaskIpc', () => {
     expect(harness.taskManager.listTasks).toHaveBeenCalledOnce()
     expect(harness.diagnosticsService.getSummary).toHaveBeenCalledWith(harness.taskList, [])
   })
-
   it('opens a directory picker and returns the selected path', async () => {
     const harness = createHarness()
     const browserWindow = createWindow()
@@ -268,7 +322,6 @@ describe('registerDownloadTaskIpc', () => {
       properties: ['openDirectory', 'createDirectory']
     })
   })
-
   it.each([
     [DOWNLOAD_TASK_IPC_CHANNELS.pauseTask, 'pauseTask'],
     [DOWNLOAD_TASK_IPC_CHANNELS.resumeTask, 'resumeTask'],
@@ -291,7 +344,6 @@ describe('registerDownloadTaskIpc', () => {
       }
     )
   })
-
   it('skips overlapping timer sync while a dashboard push is already in flight', async () => {
     const activeWindow = createWindow()
     electronMocks.windows.push(activeWindow)
@@ -319,7 +371,6 @@ describe('registerDownloadTaskIpc', () => {
     expect(harness.taskManager.listTasks).toHaveBeenCalledTimes(1)
     expect(activeWindow.webContents.send).toHaveBeenCalledTimes(1)
   })
-
   it('keeps structured task and diagnostic facts intact in dashboard snapshots', async () => {
     const activeWindow = createWindow()
     electronMocks.windows.push(activeWindow)
@@ -329,47 +380,16 @@ describe('registerDownloadTaskIpc', () => {
         seedersCount: 0,
         trackerCount: 2,
         resourceHealthScore: 30,
+        resourceHealthLevel: 'critical',
+        bottleneckCode: 'metadata_stall',
+        peerAvailability: 'none',
+        trackerHealth: 'normal',
         metadataElapsedMs: 120_000,
         zeroSpeedDurationMs: 120_000
       }
     }) as DownloadTask
     const harness = createHarness([task])
-    const diagnostics = {
-      ...createDiagnostics(),
-      facts: {
-        slowTasks: [
-          {
-            taskId: task.id,
-            sourceType: 'magnet',
-            seedersCount: 0,
-            trackerCount: 2,
-            resourceHealthScore: 30,
-            metadataElapsedMs: 120_000,
-            zeroSpeedDurationMs: 120_000
-          }
-        ],
-        resourceHealth: {
-          score: 30,
-          level: 'critical',
-          reason: '当前资源侧信号偏弱，建议降低速度预期。',
-          signals: {
-            metadataStallCount: 1,
-            zeroSpeedCount: 1,
-            trackerSparseCount: 0
-          }
-        }
-      },
-      guidance: [
-        {
-          id: `guidance-${task.id}`,
-          title: task.name,
-          taskId: task.id,
-          code: 'magnet_metadata_sparse_peers',
-          severity: 'warning',
-          shortMessage: '资源较冷，metadata 获取偏慢，当前 peer 不足。'
-        }
-      ]
-    }
+    const diagnostics = createStructuredDiagnosticsSnapshot(task)
 
     harness.diagnosticsService.getSummary = vi.fn(async () => diagnostics as never)
 
@@ -384,6 +404,10 @@ describe('registerDownloadTaskIpc', () => {
       seedersCount: 0,
       trackerCount: 2,
       resourceHealthScore: 30,
+      resourceHealthLevel: 'critical',
+      bottleneckCode: 'metadata_stall',
+      peerAvailability: 'none',
+      trackerHealth: 'normal',
       metadataElapsedMs: 120_000,
       zeroSpeedDurationMs: 120_000
     })
@@ -395,13 +419,18 @@ describe('registerDownloadTaskIpc', () => {
           seedersCount: 0,
           trackerCount: 2,
           resourceHealthScore: 30,
+          resourceHealthLevel: 'critical',
+          bottleneckCode: 'metadata_stall',
+          peerAvailability: 'none',
+          trackerHealth: 'normal',
           metadataElapsedMs: 120_000,
           zeroSpeedDurationMs: 120_000
         }
       ],
       resourceHealth: {
         score: 30,
-        level: 'critical'
+        level: 'critical',
+        dominantBottleneckCode: 'metadata_stall'
       }
     })
     expect(dashboard.diagnostics.guidance).toMatchObject([
