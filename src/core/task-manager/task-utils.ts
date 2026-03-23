@@ -97,6 +97,48 @@ function buildMagnetFacts(
   }
 }
 
+function buildFallbackTrackerHint(fallbackTrackerCount: number | undefined): string {
+  if (!fallbackTrackerCount || fallbackTrackerCount <= 0) {
+    return ''
+  }
+
+  return ` 已补充 ${fallbackTrackerCount} 个 fallback tracker。`
+}
+
+function buildMetadataPolicyMessage(task: DownloadTask): string {
+  const seedersCount = task.facts?.seedersCount ?? task.seedersCount
+  const fallbackHint = buildFallbackTrackerHint(
+    task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount
+  )
+
+  if ((seedersCount ?? 0) <= 0) {
+    return `正在获取种子元数据；当前仍未发现可用 peer，资源热度较低，建议降低速度预期并稍后再试。${fallbackHint}`.trim()
+  }
+
+  if (seedersCount === 1) {
+    return `正在获取种子元数据；当前仅发现 1 个可用 peer，资源较冷，建议降低速度预期。${fallbackHint}`.trim()
+  }
+
+  return `正在获取种子元数据；当前 peer 仍偏少，tracker 暂未返回更稳定的节点，建议先降低速度预期。${fallbackHint}`.trim()
+}
+
+function buildZeroSpeedPolicyMessage(task: DownloadTask): string {
+  const seedersCount = task.facts?.seedersCount ?? task.seedersCount
+  const fallbackHint = buildFallbackTrackerHint(
+    task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount
+  )
+
+  if ((seedersCount ?? 0) <= 0) {
+    return `当前下载速度持续为 0；已补 fallback tracker 后仍未发现稳定 peer，更可能是资源侧瓶颈，建议降低速度预期或稍后重试。${fallbackHint}`.trim()
+  }
+
+  if (seedersCount === 1) {
+    return `当前下载速度持续为 0；当前仅有 1 个可用 peer，更可能是资源侧瓶颈，建议降低速度预期。${fallbackHint}`.trim()
+  }
+
+  return `当前下载速度持续为 0；当前 peer 仍偏少或连接不稳定，建议先降低速度预期。${fallbackHint}`.trim()
+}
+
 export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot): DownloadTask {
   const metadataSince =
     snapshot.status === 'metadata'
@@ -144,11 +186,11 @@ export function resolveRuntimeTaskMessage(
     nextTask.downloadedBytes === previousTask.downloadedBytes
 
   if (nextTask.status === 'metadata' && isStalled) {
-    return '正在获取种子元数据；当前未连接到可用 peer，或 tracker 暂未返回可用节点。'
+    return buildMetadataPolicyMessage(nextTask)
   }
 
   if (nextTask.status === 'downloading' && isStalled) {
-    return '当前下载速度为 0；可能暂无可用 peer，或网络暂时不可达。'
+    return buildZeroSpeedPolicyMessage(nextTask)
   }
 
   return undefined

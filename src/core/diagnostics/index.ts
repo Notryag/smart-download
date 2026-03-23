@@ -81,6 +81,40 @@ function buildTaskFact(task: DownloadTask, checkedAt: number): DiagnosticTaskFac
   }
 }
 
+function buildMetadataHighlightDetail(fact: DiagnosticTaskFact): string {
+  const fallbackText =
+    (fact.fallbackTrackerCount ?? 0) > 0 ? `已补充 ${fact.fallbackTrackerCount} 个 fallback tracker。` : ''
+  const trackerAdvice =
+    (fact.fallbackTrackerCount ?? 0) > 0 ? '建议继续观察或稍后再试。' : '建议补充 tracker 后继续观察。'
+
+  if ((fact.seedersCount ?? 0) <= 0) {
+    return `已停留在 metadata ${Math.floor((fact.metadataElapsedMs ?? 0) / 1000)} 秒，当前仍未发现可用 peer，资源热度较低，建议降低速度预期。${fallbackText}${trackerAdvice}`.trim()
+  }
+
+  if (fact.seedersCount === 1) {
+    return `已停留在 metadata ${Math.floor((fact.metadataElapsedMs ?? 0) / 1000)} 秒，当前仅发现 1 个可用 peer，资源较冷，建议降低速度预期。${fallbackText}${trackerAdvice}`.trim()
+  }
+
+  return `已停留在 metadata ${Math.floor((fact.metadataElapsedMs ?? 0) / 1000)} 秒，当前 peer 仍偏少，建议先降低速度预期。${fallbackText}${trackerAdvice}`.trim()
+}
+
+function buildZeroSpeedHighlightDetail(fact: DiagnosticTaskFact): string {
+  const fallbackText =
+    (fact.fallbackTrackerCount ?? 0) > 0 ? `已补充 ${fact.fallbackTrackerCount} 个 fallback tracker。` : ''
+  const followUpAdvice =
+    (fact.fallbackTrackerCount ?? 0) > 0 ? '建议继续观察或稍后重试。' : '建议补充 tracker 后继续观察。'
+
+  if ((fact.seedersCount ?? 0) <= 0) {
+    return `当前已连续 ${Math.floor((fact.zeroSpeedDurationMs ?? 0) / 1000)} 秒无下载速度，仍未发现稳定 peer，更可能是资源侧瓶颈，建议降低速度预期。${fallbackText}${followUpAdvice}`.trim()
+  }
+
+  if (fact.seedersCount === 1) {
+    return `当前已连续 ${Math.floor((fact.zeroSpeedDurationMs ?? 0) / 1000)} 秒无下载速度，仅有 1 个可用 peer，更可能是资源侧瓶颈，建议降低速度预期。${fallbackText}${followUpAdvice}`.trim()
+  }
+
+  return `当前已连续 ${Math.floor((fact.zeroSpeedDurationMs ?? 0) / 1000)} 秒无下载速度，peer 仍偏少或连接不稳定，建议先降低速度预期。${fallbackText}${followUpAdvice}`.trim()
+}
+
 function buildActiveTaskHighlights(taskFacts: DiagnosticTaskFact[]): DiagnosticHighlight[] {
   const highlights: DiagnosticHighlight[] = []
 
@@ -94,7 +128,7 @@ function buildActiveTaskHighlights(taskFacts: DiagnosticTaskFact[]): DiagnosticH
         id: `metadata-${fact.taskId}`,
         severity: 'warning',
         title: `元数据获取偏慢：${fact.taskName}`,
-        detail: `已停留在 metadata ${Math.floor(fact.metadataElapsedMs / 1000)} 秒，当前做种 ${fact.seedersCount ?? 0}，tracker ${fact.trackerCount ?? 0}。`
+        detail: buildMetadataHighlightDetail(fact)
       })
     }
 
@@ -107,7 +141,7 @@ function buildActiveTaskHighlights(taskFacts: DiagnosticTaskFact[]): DiagnosticH
         id: `zero-speed-${fact.taskId}`,
         severity: 'warning',
         title: `任务持续无速度：${fact.taskName}`,
-        detail: `当前已连续 ${Math.floor(fact.zeroSpeedDurationMs / 1000)} 秒无下载速度，做种 ${fact.seedersCount ?? 0}，补充 tracker ${fact.fallbackTrackerCount ?? 0}。`
+        detail: buildZeroSpeedHighlightDetail(fact)
       })
     }
   }
