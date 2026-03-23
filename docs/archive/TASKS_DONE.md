@@ -3,6 +3,20 @@
 ## 2026-03-23
 
 - [x] 收口 AI 接手文档，移除重复入口并精简任务清单
+- [x] 归档 `TASKS.md` 中已完成且不影响后续判断的勾选项，减少当前任务噪音
+
+## 2026-03-22
+
+### Magnet 诊断基础能力
+
+- [x] 规划并落地 magnet 慢速诊断事实层：补充 seeders、metadata 停留时长、持续 0 speed 时长、tracker / runtime 关键信息
+- [x] 基于 magnet 事实层补最小策略层：peer 少时降预期、长时间无速度时补提示与 fallback tracker 说明
+- [x] 为 magnet 诊断与策略补充任务流转和用户文案测试，确保状态、提示和建议可追踪
+- [x] 将慢速原因、当前瓶颈和下一步建议并入 inspector / diagnostics，优先做规则驱动说明，不直接依赖 AI
+- [x] 资源健康评分
+- [x] 将 guidance 收口为 `code + severity + shortMessage`，减少长中文说明
+- [x] 将测试从中文文案断言切到 `code / score / level`
+- [x] 继续补 magnet 结构化诊断字段，确保 AI 后续能直接读取现状
 
 ## Stage 1: Aria2 MVP
 

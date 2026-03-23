@@ -4,9 +4,7 @@
 
 当前阶段先补 Phase 2 的非 UI 后端能力，再做 UI 收口。
 
-- [x] 规划并落地 magnet 慢速诊断事实层：补充 seeders、metadata 停留时长、持续 0 speed 时长、tracker / runtime 关键信息
-- [x] 基于 magnet 事实层补最小策略层：peer 少时降预期、长时间无速度时补提示与 fallback tracker 说明
-- [x] 为 magnet 诊断与策略补充任务流转和用户文案测试，确保状态、提示和建议可追踪
+已完成基础诊断事实层、最小策略层和对应测试，历史细项移至 `docs/archive/TASKS_DONE.md`。
 
 ## Current Constraints
 
@@ -23,11 +21,6 @@
 - [ ] 补更多网络 / 源侧结构化信号，覆盖 tracker、peer、metadata 卡住等场景
 - [ ] 将现有诊断判断继续收口为稳定规则层，统一 `facts -> score -> guidance` 输出
 - [ ] 收敛 AI 可消费的低歧义输入 schema，补齐缺失字段与边界状态
-- [x] 将慢速原因、当前瓶颈和下一步建议并入 inspector / diagnostics，优先做规则驱动说明，不直接依赖 AI
-- [x] 资源健康评分
-- [x] 将 guidance 收口为 `code + severity + shortMessage`，减少长中文说明
-- [x] 将测试从中文文案断言切到 `code / score / level`
-- [x] 继续补 magnet 结构化诊断字段，确保 AI 后续能直接读取现状
 - [ ] 诊断面板
 - [ ] 将任务详情区改造成 inspector，并前置失败原因和操作
 - [ ] 将 Header 继续收口为命令栏，进一步弱化说明文案
