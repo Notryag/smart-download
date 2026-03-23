@@ -41,7 +41,7 @@ vi.mock('electron', () => ({
   ipcMain: electronMocks.ipcMain
 }))
 
-function createTask(patch: Partial<DownloadTask> = {}): DownloadTask {
+function createTask(patch: Partial<DownloadTask> & Record<string, unknown> = {}): DownloadTask {
   return {
     id: 'task-1',
     name: 'Ubuntu ISO',
@@ -58,7 +58,7 @@ function createTask(patch: Partial<DownloadTask> = {}): DownloadTask {
     createdAt: '2026-03-21T12:00:00.000Z',
     updatedAt: '2026-03-21T12:01:00.000Z',
     ...patch
-  }
+  } as DownloadTask
 }
 
 function createDiagnostics(): DownloadDashboardSnapshot['diagnostics'] {
@@ -78,6 +78,15 @@ function createDiagnostics(): DownloadDashboardSnapshot['diagnostics'] {
       completed: 0
     },
     highlights: [],
+    taskFacts: [],
+    facts: {
+      slowTasks: [],
+      bottlenecks: {
+        metadataStallCount: 0,
+        zeroSpeedCount: 0,
+        trackerSparseCount: 0
+      }
+    },
     recentLogs: []
   }
 }
@@ -211,7 +220,9 @@ describe('registerDownloadTaskIpc', () => {
       harness.listLogs
     )
 
-    const dashboard = await getHandler(DOWNLOAD_TASK_IPC_CHANNELS.getDashboard)()
+    const dashboard = await getHandler(
+      DOWNLOAD_TASK_IPC_CHANNELS.getDashboard
+    )() as DownloadDashboardSnapshot
 
     expect(dashboard).toEqual({
       tasks: harness.taskList,
@@ -305,5 +316,68 @@ describe('registerDownloadTaskIpc', () => {
 
     expect(harness.taskManager.listTasks).toHaveBeenCalledTimes(1)
     expect(activeWindow.webContents.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps structured task and diagnostic facts intact in dashboard snapshots', async () => {
+    const activeWindow = createWindow()
+    electronMocks.windows.push(activeWindow)
+    const task = createTask({
+      facts: {
+        sourceType: 'magnet',
+        seedersCount: 0,
+        trackerCount: 2,
+        metadataElapsedMs: 120_000,
+        zeroSpeedDurationMs: 120_000
+      }
+    }) as DownloadTask
+    const harness = createHarness([task])
+    const diagnostics = {
+      ...createDiagnostics(),
+      facts: {
+        slowTasks: [
+          {
+            taskId: task.id,
+            sourceType: 'magnet',
+            seedersCount: 0,
+            trackerCount: 2,
+            metadataElapsedMs: 120_000,
+            zeroSpeedDurationMs: 120_000
+          }
+        ]
+      }
+    }
+
+    harness.diagnosticsService.getSummary = vi.fn(async () => diagnostics as never)
+
+    registerDownloadTaskIpc(
+      harness.taskManager as never,
+      harness.diagnosticsService as never,
+      harness.listLogs
+    )
+
+    const dashboard = await getHandler(
+      DOWNLOAD_TASK_IPC_CHANNELS.getDashboard
+    )() as DownloadDashboardSnapshot
+
+    expect(dashboard.tasks[0]?.facts).toMatchObject({
+      sourceType: 'magnet',
+      seedersCount: 0,
+      trackerCount: 2,
+      metadataElapsedMs: 120_000,
+      zeroSpeedDurationMs: 120_000
+    })
+    expect(dashboard.diagnostics.facts).toMatchObject({
+      slowTasks: [
+        {
+          taskId: task.id,
+          sourceType: 'magnet',
+          seedersCount: 0,
+          trackerCount: 2,
+          metadataElapsedMs: 120_000,
+          zeroSpeedDurationMs: 120_000
+        }
+      ]
+    })
+    expect(activeWindow.webContents.send).not.toHaveBeenCalled()
   })
 })

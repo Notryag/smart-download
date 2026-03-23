@@ -109,6 +109,7 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       category: 'aria2-adapter',
       details: {
         addedFallbackTrackers: requestSource.addedTrackerCount,
+        trackerCount: requestSource.trackerCount,
         savePath,
         sourcePreview: buildSourcePreview(input.source)
       },
@@ -150,6 +151,8 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       totalBytes: snapshot.totalBytes,
       downloadedBytes: snapshot.downloadedBytes,
       speedBytes: snapshot.speedBytes,
+      trackerCount: requestSource.trackerCount,
+      fallbackTrackerCount: requestSource.addedTrackerCount,
       createdAt: now,
       updatedAt: snapshot.updatedAt
     }
@@ -178,6 +181,8 @@ export class Aria2DownloadAdapter implements DownloadAdapter {
       totalBytes: task.totalBytes ?? 0,
       downloadedBytes: task.downloadedBytes,
       speedBytes: task.speedBytes,
+      trackerCount: task.facts?.trackerCount ?? task.trackerCount,
+      fallbackTrackerCount: task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount,
       createdAt: task.createdAt,
       updatedAt: now
     }

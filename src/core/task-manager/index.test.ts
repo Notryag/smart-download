@@ -109,7 +109,7 @@ function createManagerHarness(adapter: DownloadAdapter = createAdapterMock()): {
   }
 }
 
-describe('InMemoryTaskManager', () => {
+describe('InMemoryTaskManager create flow', () => {
   it('creates and starts a magnet task', async () => {
     const { adapter, store, taskManager } = createManagerHarness()
     const task = await taskManager.createTask({
@@ -148,6 +148,102 @@ describe('InMemoryTaskManager', () => {
     expect(task.errorMessage).toContain('当前未连接到可用 peer')
   })
 
+  it('tracks magnet fact fields across creation and repeated metadata syncs', async () => {
+    vi.useFakeTimers()
+
+    try {
+      vi.setSystemTime(new Date('2026-03-21T12:00:00.000Z'))
+      const adapter = createAdapterMock()
+      adapter.attachTask = vi.fn(async ({ taskId, source, savePath }) => ({
+        id: `session-${taskId}`,
+        taskId,
+        remoteId: `gid-${taskId}`,
+        source,
+        savePath,
+        status: 'pending',
+        totalBytes: 0,
+        downloadedBytes: 0,
+        speedBytes: 0,
+        trackerCount: 4,
+        fallbackTrackerCount: 7,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }))
+      adapter.startTask = vi.fn(async ({ taskId }) =>
+        createSnapshot(taskId, `gid-${taskId}`, {
+          status: 'metadata',
+          totalBytes: 0,
+          downloadedBytes: 0,
+          speedBytes: 0,
+          progress: 0,
+          seedersCount: 0
+        })
+      )
+      adapter.getTaskSnapshot = vi.fn(async ({ taskId }) =>
+        createSnapshot(taskId, `gid-${taskId}`, {
+          status: 'metadata',
+          totalBytes: 0,
+          downloadedBytes: 0,
+          speedBytes: 0,
+          progress: 0,
+          seedersCount: 0
+        })
+      )
+
+      const { store, taskManager } = createManagerHarness(adapter)
+      const task = await taskManager.createTask({
+        source: 'magnet:?xt=urn:btih:1234567890123456789012345678901234567890',
+        savePath: 'D:\\Downloads'
+      })
+
+      expect(task.status).toBe('metadata')
+      expect(task.facts).toMatchObject({
+        sourceType: 'magnet',
+        seedersCount: 0,
+        trackerCount: 4,
+        fallbackTrackerCount: 7,
+        metadataSince: '2026-03-21T12:00:00.000Z',
+        zeroSpeedSince: '2026-03-21T12:00:00.000Z',
+        metadataElapsedMs: 0,
+        zeroSpeedDurationMs: 0
+      })
+
+      vi.setSystemTime(new Date('2026-03-21T12:00:45.000Z'))
+
+      const [syncedTask] = await taskManager.listTasks()
+      expect(syncedTask.status).toBe('metadata')
+      expect(syncedTask.errorMessage).toContain('当前未连接到可用 peer')
+      expect(syncedTask.facts).toMatchObject({
+        sourceType: 'magnet',
+        seedersCount: 0,
+        trackerCount: 4,
+        fallbackTrackerCount: 7,
+        metadataSince: '2026-03-21T12:00:00.000Z',
+        zeroSpeedSince: '2026-03-21T12:00:00.000Z',
+        metadataElapsedMs: 45_000,
+        zeroSpeedDurationMs: 45_000
+      })
+      expect(taskManager.getTasks()[0].facts).toMatchObject(syncedTask.facts ?? {})
+      expect(store.tasks.get(task.id)?.facts).toMatchObject({
+        sourceType: 'magnet',
+        seedersCount: 0,
+        trackerCount: 4,
+        fallbackTrackerCount: 7,
+        metadataSince: '2026-03-21T12:00:00.000Z',
+        zeroSpeedSince: '2026-03-21T12:00:00.000Z',
+        metadataElapsedMs: 45_000,
+        zeroSpeedDurationMs: 45_000
+      })
+      expect(store.tasks.get(task.id)?.status).toBe('metadata')
+      expect(store.tasks.get(task.id)?.errorMessage).toContain('当前未连接到可用 peer')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+})
+
+describe('InMemoryTaskManager lifecycle and failure handling', () => {
   it('rolls back the remote task when start fails after attach', async () => {
     const adapter = createAdapterMock()
     adapter.startTask = vi.fn(async () => {

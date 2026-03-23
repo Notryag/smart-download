@@ -26,6 +26,17 @@ export interface CreateDownloadTaskInput {
   name?: string
 }
 
+export interface DownloadTaskFacts {
+  sourceType: DownloadTaskType
+  seedersCount?: number
+  trackerCount?: number
+  fallbackTrackerCount?: number
+  metadataSince?: string
+  zeroSpeedSince?: string
+  metadataElapsedMs?: number
+  zeroSpeedDurationMs?: number
+}
+
 export interface DownloadTask {
   id: string
   name: string
@@ -40,6 +51,11 @@ export interface DownloadTask {
   downloadedBytes: number
   totalBytes?: number
   seedersCount?: number
+  trackerCount?: number
+  fallbackTrackerCount?: number
+  metadataSince?: string
+  zeroSpeedSince?: string
+  facts?: DownloadTaskFacts
   etaSeconds?: number
   errorMessage?: string
   createdAt: string

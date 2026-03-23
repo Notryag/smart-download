@@ -2,7 +2,8 @@ import type { DownloadTaskSnapshot } from '../../adapters'
 import {
   isFinishedDownloadTaskStatus,
   type CreateDownloadTaskInput,
-  type DownloadTask
+  type DownloadTask,
+  type DownloadTaskFacts
 } from '../../types'
 
 const RESTART_RECOVERY_MESSAGE = '应用重启后下载已停止，请手动恢复任务'
@@ -49,7 +50,63 @@ export function updateTask(task: DownloadTask, patch: Partial<DownloadTask>): Do
   }
 }
 
+function parseDurationMs(from: string | undefined, to: string): number | undefined {
+  if (!from) {
+    return undefined
+  }
+
+  const startedAt = Date.parse(from)
+  const endedAt = Date.parse(to)
+
+  if (Number.isNaN(startedAt) || Number.isNaN(endedAt)) {
+    return undefined
+  }
+
+  return Math.max(endedAt - startedAt, 0)
+}
+
+function buildMagnetFacts(
+  task: DownloadTask,
+  patch: Partial<DownloadTaskFacts>,
+  updatedAt: string
+): DownloadTaskFacts | undefined {
+  if (task.type !== 'magnet') {
+    return task.facts
+  }
+
+  const previousFacts = task.facts
+  const metadataSince =
+    patch.metadataSince !== undefined ? patch.metadataSince : previousFacts?.metadataSince ?? task.metadataSince
+  const zeroSpeedSince =
+    patch.zeroSpeedSince !== undefined ? patch.zeroSpeedSince : previousFacts?.zeroSpeedSince ?? task.zeroSpeedSince
+
+  return {
+    sourceType: 'magnet',
+    seedersCount:
+      patch.seedersCount !== undefined ? patch.seedersCount : previousFacts?.seedersCount ?? task.seedersCount,
+    trackerCount:
+      patch.trackerCount !== undefined ? patch.trackerCount : previousFacts?.trackerCount ?? task.trackerCount,
+    fallbackTrackerCount:
+      patch.fallbackTrackerCount !== undefined
+        ? patch.fallbackTrackerCount
+        : previousFacts?.fallbackTrackerCount ?? task.fallbackTrackerCount,
+    metadataSince,
+    zeroSpeedSince,
+    metadataElapsedMs: parseDurationMs(metadataSince, updatedAt),
+    zeroSpeedDurationMs: parseDurationMs(zeroSpeedSince, updatedAt)
+  }
+}
+
 export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot): DownloadTask {
+  const metadataSince =
+    snapshot.status === 'metadata'
+      ? task.facts?.metadataSince ?? task.metadataSince ?? snapshot.updatedAt
+      : undefined
+  const zeroSpeedSince =
+    ['metadata', 'downloading'].includes(snapshot.status) && snapshot.speedBytes === 0
+      ? task.facts?.zeroSpeedSince ?? task.zeroSpeedSince ?? snapshot.updatedAt
+      : undefined
+
   return updateTask(task, {
     remoteId: snapshot.remoteId ?? task.remoteId,
     status: snapshot.status,
@@ -58,6 +115,17 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
     totalBytes: snapshot.totalBytes,
     speedBytes: snapshot.speedBytes,
     seedersCount: snapshot.seedersCount,
+    metadataSince,
+    zeroSpeedSince,
+    facts: buildMagnetFacts(
+      task,
+      {
+        seedersCount: snapshot.seedersCount,
+        metadataSince,
+        zeroSpeedSince
+      },
+      snapshot.updatedAt
+    ),
     etaSeconds: snapshot.etaSeconds,
     errorMessage: snapshot.errorMessage
   })
@@ -108,6 +176,9 @@ export function createPendingMagnetTask(input: CreateDownloadTaskInput): Downloa
     progress: 0,
     speedBytes: 0,
     downloadedBytes: 0,
+    facts: {
+      sourceType: 'magnet'
+    },
     createdAt: now,
     updatedAt: now
   }
@@ -124,6 +195,16 @@ export function restoreTaskState(task: DownloadTask): DownloadTask {
     return updateTask(task, {
       status: 'paused',
       speedBytes: 0,
+      metadataSince: undefined,
+      zeroSpeedSince: undefined,
+      facts: buildMagnetFacts(
+        task,
+        {
+          metadataSince: undefined,
+          zeroSpeedSince: undefined
+        },
+        new Date().toISOString()
+      ),
       etaSeconds: undefined,
       errorMessage: RESTART_RECOVERY_MESSAGE
     })
@@ -132,6 +213,16 @@ export function restoreTaskState(task: DownloadTask): DownloadTask {
   if (task.status === 'paused') {
     return updateTask(task, {
       speedBytes: 0,
+      metadataSince: undefined,
+      zeroSpeedSince: undefined,
+      facts: buildMagnetFacts(
+        task,
+        {
+          metadataSince: undefined,
+          zeroSpeedSince: undefined
+        },
+        new Date().toISOString()
+      ),
       etaSeconds: undefined
     })
   }
@@ -139,6 +230,16 @@ export function restoreTaskState(task: DownloadTask): DownloadTask {
   if (isFinishedDownloadTaskStatus(task.status)) {
     return updateTask(task, {
       speedBytes: 0,
+      metadataSince: undefined,
+      zeroSpeedSince: undefined,
+      facts: buildMagnetFacts(
+        task,
+        {
+          metadataSince: undefined,
+          zeroSpeedSince: undefined
+        },
+        new Date().toISOString()
+      ),
       etaSeconds: undefined
     })
   }

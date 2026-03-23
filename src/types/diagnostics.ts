@@ -1,3 +1,5 @@
+import type { DownloadTaskStatus, DownloadTaskType } from './download-task'
+
 export type DiagnosticSeverity = 'info' | 'warning' | 'error'
 
 export interface DiagnosticHighlight {
@@ -17,6 +19,27 @@ export interface DiagnosticLogEntry {
   createdAt: string
 }
 
+export interface DiagnosticTaskFact {
+  taskId: string
+  taskName: string
+  sourceType: DownloadTaskType
+  status: DownloadTaskStatus
+  seedersCount?: number
+  trackerCount?: number
+  fallbackTrackerCount?: number
+  metadataElapsedMs?: number
+  zeroSpeedDurationMs?: number
+}
+
+export interface DiagnosticFactsSummary {
+  slowTasks: DiagnosticTaskFact[]
+  bottlenecks: {
+    metadataStallCount: number
+    zeroSpeedCount: number
+    trackerSparseCount: number
+  }
+}
+
 export interface DiagnosticSummary {
   checkedAt: string
   overview: string
@@ -33,5 +56,7 @@ export interface DiagnosticSummary {
     completed: number
   }
   highlights: DiagnosticHighlight[]
+  taskFacts: DiagnosticTaskFact[]
+  facts: DiagnosticFactsSummary
   recentLogs: DiagnosticLogEntry[]
 }

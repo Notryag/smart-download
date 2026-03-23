@@ -37,6 +37,7 @@ export function assertSource(source: string): void {
 
 export function normalizeMagnetSourceForAria2(source: string): {
   source: string
+  trackerCount: number
   addedTrackerCount: number
 } {
   const normalizedSource = source.trim()
@@ -47,6 +48,7 @@ export function normalizeMagnetSourceForAria2(source: string): {
     if (magnet.protocol !== 'magnet:') {
       return {
         source: normalizedSource,
+        trackerCount: 0,
         addedTrackerCount: 0
       }
     }
@@ -84,6 +86,7 @@ export function normalizeMagnetSourceForAria2(source: string): {
 
     return {
       source: magnet.toString(),
+      trackerCount: mergedTrackers.length,
       addedTrackerCount: mergedTrackers.filter((tracker) =>
         !existingTrackers.some((existingTracker) => existingTracker.toLowerCase() === tracker.toLowerCase())
       ).length
@@ -91,6 +94,7 @@ export function normalizeMagnetSourceForAria2(source: string): {
   } catch {
     return {
       source: normalizedSource,
+      trackerCount: 0,
       addedTrackerCount: 0
     }
   }

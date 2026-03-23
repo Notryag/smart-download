@@ -4,9 +4,9 @@
 
 当前阶段先补后端能力，再做 UI 收口。
 
-- [ ] 规划并落地 magnet 慢速诊断事实层：补充 seeders、metadata 停留时长、持续 0 speed 时长、tracker / runtime 关键信息
+- [x] 规划并落地 magnet 慢速诊断事实层：补充 seeders、metadata 停留时长、持续 0 speed 时长、tracker / runtime 关键信息
 - [ ] 基于 magnet 事实层补最小策略层：peer 少时降预期、长时间无速度时补提示与 fallback tracker 说明
-- [ ] 为 magnet 诊断与策略补充任务流转和用户文案测试，确保状态、提示和建议可追踪
+- [x] 为 magnet 诊断与策略补充任务流转和用户文案测试，确保状态、提示和建议可追踪
 
 ## Current Constraints
 

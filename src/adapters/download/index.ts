@@ -21,6 +21,8 @@ export interface DownloadAdapterSession {
   totalBytes: number
   downloadedBytes: number
   speedBytes: number
+  trackerCount?: number
+  fallbackTrackerCount?: number
   createdAt: string
   updatedAt: string
 }

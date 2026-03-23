@@ -100,6 +100,17 @@ export class InMemoryTaskManager {
       })
       const attachedTask = updateTask(task, {
         remoteId: attachedSession.remoteId,
+        trackerCount: attachedSession.trackerCount,
+        fallbackTrackerCount: attachedSession.fallbackTrackerCount,
+        facts:
+          task.type === 'magnet'
+            ? {
+                ...task.facts,
+                sourceType: 'magnet',
+                trackerCount: attachedSession.trackerCount,
+                fallbackTrackerCount: attachedSession.fallbackTrackerCount
+              }
+            : task.facts,
         errorMessage: undefined
       })
       currentTask = attachedTask
