@@ -8,6 +8,7 @@
 已补 `aria2.connections -> task facts` 与 `metadataState` 结构化阶段信号，可区分等待 peer、连接 peer、metadata 交换卡住三类场景。
 为了支持后续 AI 自主回归与薄弱点发现，下一步应优先补“共享下载 runtime 装配 + 面向机器的自动化入口”，而不是把产品形态改成独立 CLI。
 已抽共享下载 runtime bootstrap，主进程入口改为复用 `createDownloadRuntime()`，下载装配不再直接耦合窗口 / IPC。
+已补内部 JSON harness 核心命令与测试，当前还缺可直接调用的薄 CLI 包装与运行入口。
 
 ## Current Constraints
 
