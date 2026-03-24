@@ -2,7 +2,6 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync
 import { join } from 'node:path'
 import { createServer } from 'node:net'
 import { spawn, type ChildProcess } from 'node:child_process'
-import type { App } from 'electron'
 import { Aria2RpcClient, type Aria2ClientConfig } from '../../adapters'
 import { BT_BOOTSTRAP_HOSTS, type InMemoryLogger } from '../../core'
 
@@ -13,6 +12,11 @@ const BT_DHT_BOOTSTRAP_PORT = 6881
 export interface ManagedAria2StartResult {
   config: Aria2ClientConfig | null
   unavailableMessage?: string
+}
+
+export interface ManagedAria2Paths {
+  userDataPath: string
+  downloadsPath: string
 }
 
 function getPlatformBinaryName(): string {
@@ -174,7 +178,7 @@ export class ManagedAria2Service {
   private managedConfig: Aria2ClientConfig | null = null
 
   constructor(
-    private readonly app: App,
+    private readonly paths: ManagedAria2Paths,
     private readonly logger: InMemoryLogger
   ) {}
 
@@ -191,8 +195,8 @@ export class ManagedAria2Service {
 
     try {
       const binaryPath = resolveBundledAria2BinaryPath()
-      const runtimeDir = join(this.app.getPath('userData'), 'aria2')
-      const downloadDir = join(this.app.getPath('downloads'), 'smart-download')
+      const runtimeDir = join(this.paths.userDataPath, 'aria2')
+      const downloadDir = join(this.paths.downloadsPath, 'smart-download')
       const sessionPath = join(runtimeDir, 'session.txt')
       const dhtPath = join(runtimeDir, 'dht.dat')
       const dht6Path = join(runtimeDir, 'dht6.dat')

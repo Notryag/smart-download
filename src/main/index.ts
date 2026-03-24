@@ -1,12 +1,8 @@
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
-import { Aria2DownloadAdapter } from '../adapters'
-import { BasicDiagnosticsService, InMemoryLogger, InMemoryTaskManager } from '../core'
-import { SqliteDownloadTaskStore } from '../storage'
-import { readAria2ClientConfig } from './config/download-clients'
 import { registerDownloadTaskIpc } from './ipc/download-task'
-import { ManagedAria2Service } from './runtime/managed-aria2'
+import { createDownloadRuntime } from './runtime/download-runtime'
 
 const isDev = !app.isPackaged
 
@@ -80,39 +76,28 @@ app.whenReady().then(() => {
     registerWindowShortcuts(window)
   })
 
-  const taskStore = new SqliteDownloadTaskStore(
-    join(app.getPath('userData'), 'storage', 'download-tasks.sqlite')
-  )
-  const logger = new InMemoryLogger()
-  const managedAria2Service = new ManagedAria2Service(app, logger)
-
-  return managedAria2Service.start(readAria2ClientConfig()).then((startup) => {
-    const aria2Adapter = new Aria2DownloadAdapter(
-      startup.config,
-      startup.unavailableMessage ??
-        '未能连接内置 aria2。请确认资源目录中的 aria2c 二进制存在且可执行。',
-      logger
+  return createDownloadRuntime({
+    paths: {
+      userDataPath: app.getPath('userData'),
+      downloadsPath: app.getPath('downloads')
+    }
+  }).then((runtime) => {
+    registerDownloadTaskIpc(runtime.taskManager, runtime.diagnosticsService, () =>
+      runtime.logger.listEntries()
     )
-    const taskManager = new InMemoryTaskManager(aria2Adapter, logger, taskStore)
-    const diagnosticsService = new BasicDiagnosticsService(aria2Adapter)
 
-    return taskManager.restoreTasks().then(() => {
-      registerDownloadTaskIpc(taskManager, diagnosticsService, () => logger.listEntries())
+    createWindow()
 
-      createWindow()
+    app.on('activate', function () {
+      // On macOS it's common to re-create a window in the app when the
+      // dock icon is clicked and there are no other windows open.
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow()
+      }
+    })
 
-      app.on('activate', function () {
-        // On macOS it's common to re-create a window in the app when the
-        // dock icon is clicked and there are no other windows open.
-        if (BrowserWindow.getAllWindows().length === 0) {
-          createWindow()
-        }
-      })
-
-      app.on('before-quit', () => {
-        managedAria2Service.stop()
-        taskStore.close()
-      })
+    app.on('before-quit', () => {
+      runtime.stop()
     })
   })
 })

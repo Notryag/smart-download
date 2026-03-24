@@ -7,6 +7,7 @@
 已完成基础诊断事实层、最小策略层和对应测试，历史细项移至 `docs/archive/TASKS_DONE.md`。
 已补 `aria2.connections -> task facts` 与 `metadataState` 结构化阶段信号，可区分等待 peer、连接 peer、metadata 交换卡住三类场景。
 为了支持后续 AI 自主回归与薄弱点发现，下一步应优先补“共享下载 runtime 装配 + 面向机器的自动化入口”，而不是把产品形态改成独立 CLI。
+已抽共享下载 runtime bootstrap，主进程入口改为复用 `createDownloadRuntime()`，下载装配不再直接耦合窗口 / IPC。
 
 ## Current Constraints
 
@@ -21,7 +22,7 @@
 
 当前顺序：先补 Phase 2 后端增强，再做 UI 收口，最后再评估多引擎 / AI 扩展。
 
-- [ ] 抽共享下载 runtime bootstrap，解耦 Electron 窗口 / IPC 与下载装配，允许自动化入口复用同一主链路
+- [x] 抽共享下载 runtime bootstrap，解耦 Electron 窗口 / IPC 与下载装配，允许自动化入口复用同一主链路
   Entry points: `src/main/index.ts`, `src/main/runtime/managed-aria2.ts`, `src/core/task-manager/index.ts`, `src/storage/index.ts`
 - [ ] 提供面向自动化的内部 JSON CLI / harness，最小支持 `create/list/wait/diagnostics/delete`
   Entry points: 先复用 runtime bootstrap；命令面优先新建 `src/cli/*`，避免把 Electron 入口继续做厚

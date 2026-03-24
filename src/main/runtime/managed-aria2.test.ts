@@ -39,17 +39,13 @@ function createChildProcessMock(): {
   }
 }
 
-function createAppMock(userDataPath: string, downloadsPath: string): {
-  getPath: (name: 'userData' | 'downloads') => string
+function createPathsMock(userDataPath: string, downloadsPath: string): {
+  userDataPath: string
+  downloadsPath: string
 } {
   return {
-    getPath(name: 'userData' | 'downloads'): string {
-      if (name === 'userData') {
-        return userDataPath
-      }
-
-      return downloadsPath
-    }
+    userDataPath,
+    downloadsPath
   }
 }
 
@@ -110,7 +106,7 @@ describe('ManagedAria2Service', () => {
     )
 
     const service = new ManagedAria2Service(
-      createAppMock(userDataPath, downloadsPath) as never,
+      createPathsMock(userDataPath, downloadsPath),
       new InMemoryLogger()
     )
 
@@ -127,7 +123,7 @@ describe('ManagedAria2Service', () => {
 
   it('starts managed aria2 with isolated app-scoped config and dht state', async () => {
     const service = new ManagedAria2Service(
-      createAppMock(userDataPath, downloadsPath) as never,
+      createPathsMock(userDataPath, downloadsPath),
       new InMemoryLogger()
     )
 
