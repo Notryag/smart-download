@@ -54,6 +54,18 @@ Electron 桌面端智能下载调度器。
 - dashboard 状态同步已经切到 `main -> renderer` 主动推送
 - `src/adapters/bt` 里的 qBittorrent 相关代码不是当前生效主链路
 
+## Current hotspots
+- Phase 2 诊断 / facts / guidance：`src/core/task-manager/task-facts.ts`、`src/core/task-manager/task-utils.ts`、`src/core/diagnostics/index.ts`
+- aria2 magnet 主链路与原始信号映射：`src/adapters/aria2/index.ts`、`src/adapters/aria2/utils.ts`
+- 任务状态同步与仪表盘快照：`src/core/task-manager/index.ts`、`src/main/ipc/download-task.ts`
+- Electron 启动装配与托管 aria2：`src/main/index.ts`、`src/main/runtime/managed-aria2.ts`
+
+## Task routing
+- 做 Phase 2 后端结构化信号时，先看 `src/core/task-manager/*` 和 `src/core/diagnostics/*`
+- 做 magnet / aria2 相关问题时，先看 `src/adapters/aria2/*`
+- 做状态同步、dashboard、inspector 数据来源时，先看 `src/main/ipc/download-task.ts`
+- 做“共享 runtime / 自动化入口”时，先看 `src/main/index.ts` 和 `src/main/runtime/managed-aria2.ts`
+
 ## Done criteria
 - 应用能创建 magnet 下载任务
 - 进度和状态能正确更新

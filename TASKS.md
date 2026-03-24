@@ -22,10 +22,15 @@
 当前顺序：先补 Phase 2 后端增强，再做 UI 收口，最后再评估多引擎 / AI 扩展。
 
 - [ ] 抽共享下载 runtime bootstrap，解耦 Electron 窗口 / IPC 与下载装配，允许自动化入口复用同一主链路
+  Entry points: `src/main/index.ts`, `src/main/runtime/managed-aria2.ts`, `src/core/task-manager/index.ts`, `src/storage/index.ts`
 - [ ] 提供面向自动化的内部 JSON CLI / harness，最小支持 `create/list/wait/diagnostics/delete`
+  Entry points: 先复用 runtime bootstrap；命令面优先新建 `src/cli/*`，避免把 Electron 入口继续做厚
 - [ ] 继续补更多网络 / 源侧结构化信号，当前已覆盖 tracker 弱、peer 未连上、metadata 交换卡住，后续补更细的 tracker / peer 边界
+  Entry points: `src/core/task-manager/task-facts.ts`, `src/core/task-manager/task-utils.ts`, `src/core/diagnostics/index.ts`, `src/adapters/aria2/utils.ts`
 - [ ] 将现有诊断判断继续收口为稳定规则层，统一 `facts -> score -> guidance` 输出
+  Entry points: `src/core/task-manager/task-facts.ts`, `src/core/task-manager/task-utils.ts`, `src/core/diagnostics/index.ts`, `src/types/download-task.ts`, `src/types/diagnostics.ts`
 - [ ] 收敛 AI 可消费的低歧义输入 schema，补齐缺失字段与边界状态
+  Entry points: `src/types/download-task.ts`, `src/types/diagnostics.ts`, `src/main/ipc/download-task.ts`
 - [ ] 诊断面板
 - [ ] 将任务详情区改造成 inspector，并前置失败原因和操作
 - [ ] 将 Header 继续收口为命令栏，进一步弱化说明文案
