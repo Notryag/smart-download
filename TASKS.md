@@ -6,6 +6,7 @@
 
 已完成基础诊断事实层、最小策略层和对应测试，历史细项移至 `docs/archive/TASKS_DONE.md`。
 已补 `aria2.connections -> task facts` 与 `metadataState` 结构化阶段信号，可区分等待 peer、连接 peer、metadata 交换卡住三类场景。
+为了支持后续 AI 自主回归与薄弱点发现，下一步应优先补“共享下载 runtime 装配 + 面向机器的自动化入口”，而不是把产品形态改成独立 CLI。
 
 ## Current Constraints
 
@@ -14,11 +15,14 @@
 - 任务状态必须可追踪
 - 失败必须有用户可读提示
 - renderer 只负责 UI，下载逻辑放 `main / core / adapter`
+- 如需命令行能力，只做内部自动化 / 调试入口，默认输出结构化 JSON，不把产品改造成 CLI
 
 ## Next
 
 当前顺序：先补 Phase 2 后端增强，再做 UI 收口，最后再评估多引擎 / AI 扩展。
 
+- [ ] 抽共享下载 runtime bootstrap，解耦 Electron 窗口 / IPC 与下载装配，允许自动化入口复用同一主链路
+- [ ] 提供面向自动化的内部 JSON CLI / harness，最小支持 `create/list/wait/diagnostics/delete`
 - [ ] 继续补更多网络 / 源侧结构化信号，当前已覆盖 tracker 弱、peer 未连上、metadata 交换卡住，后续补更细的 tracker / peer 边界
 - [ ] 将现有诊断判断继续收口为稳定规则层，统一 `facts -> score -> guidance` 输出
 - [ ] 收敛 AI 可消费的低歧义输入 schema，补齐缺失字段与边界状态
@@ -40,6 +44,7 @@
 
 ### Phase 2
 
+- 抽共享 runtime 和自动化入口，让 AI / 脚本可以稳定复用真实下载主链路
 - 补更多网络 / 源侧结构化信号
 - 基于规则引擎做更稳定的策略判断
 - 为后续 AI 解释层准备低歧义输入
