@@ -1,6 +1,7 @@
 import type {
   DownloadTaskBottleneckCode,
   DownloadTaskGuidanceCode,
+  DownloadTaskMetadataState,
   DownloadTaskPeerAvailability,
   DownloadTaskResourceHealthLevel,
   DownloadTaskStatus,
@@ -35,6 +36,7 @@ export interface DiagnosticTaskFact {
   sourceType: DownloadTaskType
   status: DownloadTaskStatus
   seedersCount?: number
+  connectionsCount?: number
   trackerCount?: number
   fallbackTrackerCount?: number
   metadataElapsedMs?: number
@@ -44,6 +46,7 @@ export interface DiagnosticTaskFact {
   bottleneckCode?: DownloadTaskBottleneckCode
   peerAvailability?: DownloadTaskPeerAvailability
   trackerHealth?: DownloadTaskTrackerHealth
+  metadataState?: DownloadTaskMetadataState
 }
 
 export interface DiagnosticGuidance {

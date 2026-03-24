@@ -33,6 +33,12 @@ export const DOWNLOAD_TASK_BOTTLENECK_CODES = [
 ] as const
 export const DOWNLOAD_TASK_PEER_AVAILABILITIES = ['none', 'scarce', 'limited', 'good'] as const
 export const DOWNLOAD_TASK_TRACKER_HEALTH_STATES = ['none', 'sparse', 'normal'] as const
+export const DOWNLOAD_TASK_METADATA_STATES = [
+  'idle',
+  'waiting_peers',
+  'connecting_peers',
+  'exchanging_metadata'
+] as const
 
 export interface CreateDownloadTaskInput {
   source: string
@@ -46,6 +52,7 @@ export type DownloadTaskResourceHealthLevel = (typeof DOWNLOAD_TASK_RESOURCE_HEA
 export type DownloadTaskBottleneckCode = (typeof DOWNLOAD_TASK_BOTTLENECK_CODES)[number]
 export type DownloadTaskPeerAvailability = (typeof DOWNLOAD_TASK_PEER_AVAILABILITIES)[number]
 export type DownloadTaskTrackerHealth = (typeof DOWNLOAD_TASK_TRACKER_HEALTH_STATES)[number]
+export type DownloadTaskMetadataState = (typeof DOWNLOAD_TASK_METADATA_STATES)[number]
 
 export interface DownloadTaskGuidance {
   code: DownloadTaskGuidanceCode
@@ -59,6 +66,7 @@ export interface DownloadTaskGuidance {
 export interface DownloadTaskFacts {
   sourceType: DownloadTaskType
   seedersCount?: number
+  connectionsCount?: number
   trackerCount?: number
   fallbackTrackerCount?: number
   metadataSince?: string
@@ -70,6 +78,7 @@ export interface DownloadTaskFacts {
   bottleneckCode?: DownloadTaskBottleneckCode
   peerAvailability?: DownloadTaskPeerAvailability
   trackerHealth?: DownloadTaskTrackerHealth
+  metadataState?: DownloadTaskMetadataState
   guidance?: DownloadTaskGuidance
 }
 
@@ -87,6 +96,7 @@ export interface DownloadTask {
   downloadedBytes: number
   totalBytes?: number
   seedersCount?: number
+  connectionsCount?: number
   trackerCount?: number
   fallbackTrackerCount?: number
   metadataSince?: string

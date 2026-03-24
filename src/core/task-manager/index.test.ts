@@ -39,6 +39,7 @@ function createSnapshot(
     downloadedBytes: 10,
     speedBytes: 5,
     progress: 0.1,
+    connectionsCount: 0,
     updatedAt: new Date().toISOString(),
     ...patch
   }
@@ -107,6 +108,39 @@ function createManagerHarness(adapter: DownloadAdapter = createAdapterMock()): {
     store,
     taskManager
   }
+}
+
+function expectWaitingMetadataFacts(
+  task: DownloadTask | undefined,
+  metadataElapsedMs: number,
+  includeGuidance = false
+): void {
+  expect(task?.facts).toMatchObject({
+    sourceType: 'magnet',
+    seedersCount: 0,
+    connectionsCount: 0,
+    trackerCount: 4,
+    fallbackTrackerCount: 7,
+    metadataSince: '2026-03-21T12:00:00.000Z',
+    zeroSpeedSince: '2026-03-21T12:00:00.000Z',
+    metadataElapsedMs,
+    zeroSpeedDurationMs: metadataElapsedMs,
+    resourceHealthScore: 80,
+    resourceHealthLevel: 'healthy',
+    bottleneckCode: 'peer_sparse',
+    metadataState: 'waiting_peers',
+    peerAvailability: 'none',
+    trackerHealth: 'normal',
+    ...(includeGuidance
+      ? {
+          guidance: {
+            code: 'magnet_metadata_sparse_peers',
+            severity: 'warning',
+            shortMessage: expect.any(String)
+          }
+        }
+      : {})
+  })
 }
 
 describe('InMemoryTaskManager create flow', () => {
@@ -219,21 +253,7 @@ describe('InMemoryTaskManager create flow', () => {
       })
 
       expect(task.status).toBe('metadata')
-      expect(task.facts).toMatchObject({
-        sourceType: 'magnet',
-        seedersCount: 0,
-        trackerCount: 4,
-        fallbackTrackerCount: 7,
-        metadataSince: '2026-03-21T12:00:00.000Z',
-        zeroSpeedSince: '2026-03-21T12:00:00.000Z',
-        metadataElapsedMs: 0,
-        zeroSpeedDurationMs: 0,
-        resourceHealthScore: 80,
-        resourceHealthLevel: 'healthy',
-        bottleneckCode: 'peer_sparse',
-        peerAvailability: 'none',
-        trackerHealth: 'normal'
-      })
+      expectWaitingMetadataFacts(task, 0)
 
       vi.setSystemTime(new Date('2026-03-21T12:00:45.000Z'))
 
@@ -246,47 +266,9 @@ describe('InMemoryTaskManager create flow', () => {
       })
       expect(syncedTask.errorMessage).toContain(syncedTask.facts?.guidance?.shortMessage ?? '')
       expect(syncedTask.errorMessage).toContain('已补充 7 个 fallback tracker')
-      expect(syncedTask.facts).toMatchObject({
-        sourceType: 'magnet',
-        seedersCount: 0,
-        trackerCount: 4,
-        fallbackTrackerCount: 7,
-        metadataSince: '2026-03-21T12:00:00.000Z',
-        zeroSpeedSince: '2026-03-21T12:00:00.000Z',
-        metadataElapsedMs: 45_000,
-        zeroSpeedDurationMs: 45_000,
-        resourceHealthScore: 80,
-        resourceHealthLevel: 'healthy',
-        bottleneckCode: 'peer_sparse',
-        peerAvailability: 'none',
-        trackerHealth: 'normal',
-        guidance: {
-          code: 'magnet_metadata_sparse_peers',
-          severity: 'warning',
-          shortMessage: expect.any(String)
-        }
-      })
+      expectWaitingMetadataFacts(syncedTask, 45_000, true)
       expect(taskManager.getTasks()[0].facts).toMatchObject(syncedTask.facts ?? {})
-      expect(store.tasks.get(task.id)?.facts).toMatchObject({
-        sourceType: 'magnet',
-        seedersCount: 0,
-        trackerCount: 4,
-        fallbackTrackerCount: 7,
-        metadataSince: '2026-03-21T12:00:00.000Z',
-        zeroSpeedSince: '2026-03-21T12:00:00.000Z',
-        metadataElapsedMs: 45_000,
-        zeroSpeedDurationMs: 45_000,
-        resourceHealthScore: 80,
-        resourceHealthLevel: 'healthy',
-        bottleneckCode: 'peer_sparse',
-        peerAvailability: 'none',
-        trackerHealth: 'normal',
-        guidance: {
-          code: 'magnet_metadata_sparse_peers',
-          severity: 'warning',
-          shortMessage: expect.any(String)
-        }
-      })
+      expectWaitingMetadataFacts(store.tasks.get(task.id), 45_000, true)
       expect(store.tasks.get(task.id)?.status).toBe('metadata')
       expect(store.tasks.get(task.id)?.errorMessage).toContain(
         store.tasks.get(task.id)?.facts?.guidance?.shortMessage ?? ''
@@ -294,6 +276,50 @@ describe('InMemoryTaskManager create flow', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('surfaces metadata exchange stalls after peer connections are established', async () => {
+    const adapter = createAdapterMock()
+    adapter.attachTask = vi.fn(async ({ taskId, source, savePath }) => ({
+      id: `session-${taskId}`,
+      taskId,
+      remoteId: `gid-${taskId}`,
+      source,
+      savePath,
+      status: 'pending',
+      totalBytes: 0,
+      downloadedBytes: 0,
+      speedBytes: 0,
+      trackerCount: 4,
+      fallbackTrackerCount: 2,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }))
+    adapter.startTask = vi.fn(async ({ taskId }) =>
+      createSnapshot(taskId, `gid-${taskId}`, {
+        status: 'metadata',
+        totalBytes: 0,
+        downloadedBytes: 0,
+        speedBytes: 0,
+        progress: 0,
+        seedersCount: 3,
+        connectionsCount: 2
+      })
+    )
+
+    const { taskManager } = createManagerHarness(adapter)
+    const task = await taskManager.createTask({
+      source: 'magnet:?xt=urn:btih:1234567890123456789012345678901234567890',
+      savePath: 'D:\\Downloads'
+    })
+
+    expect(task.facts).toMatchObject({
+      sourceType: 'magnet',
+      seedersCount: 3,
+      connectionsCount: 2,
+      metadataState: 'exchanging_metadata'
+    })
+    expect(task.errorMessage).toContain('已连上 2 个 peer')
   })
 
 })

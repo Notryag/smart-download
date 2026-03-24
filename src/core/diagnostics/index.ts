@@ -12,6 +12,7 @@ import type { DownloadAdapter } from '../../adapters'
 import type { LogEntry } from '../logger'
 import {
   buildBottleneckCode,
+  buildMetadataState,
   buildPeerAvailability,
   buildResourceHealthLevel,
   buildResourceHealthScore,
@@ -84,6 +85,7 @@ function buildTaskFact(task: DownloadTask, checkedAt: number): DiagnosticTaskFac
     sourceType: task.facts?.sourceType ?? task.type,
     status: task.status,
     seedersCount: task.facts?.seedersCount ?? task.seedersCount,
+    connectionsCount: task.facts?.connectionsCount ?? task.connectionsCount,
     trackerCount: task.facts?.trackerCount ?? task.trackerCount,
     fallbackTrackerCount: task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount,
     metadataElapsedMs,
@@ -96,7 +98,8 @@ function buildTaskFact(task: DownloadTask, checkedAt: number): DiagnosticTaskFac
     peerAvailability:
       task.facts?.peerAvailability ?? buildPeerAvailability(task.facts?.seedersCount ?? task.seedersCount),
     trackerHealth:
-      task.facts?.trackerHealth ?? buildTrackerHealth(task.facts?.trackerCount ?? task.trackerCount)
+      task.facts?.trackerHealth ?? buildTrackerHealth(task.facts?.trackerCount ?? task.trackerCount),
+    metadataState: task.facts?.metadataState ?? buildMetadataState(task)
   }
 }
 
@@ -105,6 +108,22 @@ function buildMetadataHighlightDetail(fact: DiagnosticTaskFact): string {
     (fact.fallbackTrackerCount ?? 0) > 0 ? `已补充 ${fact.fallbackTrackerCount} 个 fallback tracker。` : ''
   const trackerAdvice =
     (fact.fallbackTrackerCount ?? 0) > 0 ? '建议继续观察或稍后再试。' : '建议补充 tracker 后继续观察。'
+
+  if (fact.metadataState === 'exchanging_metadata') {
+    return `已停留在 metadata ${Math.floor((fact.metadataElapsedMs ?? 0) / 1000)} 秒，当前已建立 ${fact.connectionsCount ?? 0} 个 peer 连接，但元数据交换仍未完成。${fallbackText}建议继续观察，若长时间无变化可稍后重试。`.trim()
+  }
+
+  if (fact.metadataState === 'connecting_peers') {
+    return `已停留在 metadata ${Math.floor((fact.metadataElapsedMs ?? 0) / 1000)} 秒，当前已发现 ${fact.seedersCount ?? 0} 个 peer，但连接仍未稳定。${fallbackText}建议继续观察连接是否建立。`.trim()
+  }
+
+  if (fact.trackerHealth === 'none') {
+    return `已停留在 metadata ${Math.floor((fact.metadataElapsedMs ?? 0) / 1000)} 秒，当前 tracker 信号较弱，仍未发现可用 peer。${fallbackText}${trackerAdvice}`.trim()
+  }
+
+  if (fact.trackerHealth === 'sparse') {
+    return `已停留在 metadata ${Math.floor((fact.metadataElapsedMs ?? 0) / 1000)} 秒，当前 tracker 返回的 peer 仍偏少，metadata 仍在等待可连接节点。${fallbackText}${trackerAdvice}`.trim()
+  }
 
   if ((fact.seedersCount ?? 0) <= 0) {
     return `已停留在 metadata ${Math.floor((fact.metadataElapsedMs ?? 0) / 1000)} 秒，当前仍未发现可用 peer，资源热度较低，建议降低速度预期。${fallbackText}${trackerAdvice}`.trim()

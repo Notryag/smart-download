@@ -55,6 +55,7 @@ describe('BasicDiagnosticsService', () => {
           facts: {
             sourceType: 'magnet',
             seedersCount: 0,
+            connectionsCount: 0,
             trackerCount: 2,
             metadataSince: '2026-03-21T12:00:00.000Z',
             zeroSpeedSince: '2026-03-21T12:00:00.000Z',
@@ -71,6 +72,7 @@ describe('BasicDiagnosticsService', () => {
           facts: {
             sourceType: 'magnet',
             seedersCount: 1,
+            connectionsCount: 0,
             trackerCount: 1,
             fallbackTrackerCount: 3,
             zeroSpeedDurationMs: 61_000
@@ -88,10 +90,12 @@ describe('BasicDiagnosticsService', () => {
             status: 'metadata',
             sourceType: 'magnet',
             seedersCount: 0,
+            connectionsCount: 0,
             trackerCount: 2,
             resourceHealthScore: 30,
             resourceHealthLevel: 'critical',
             bottleneckCode: 'metadata_stall',
+            metadataState: 'waiting_peers',
             peerAvailability: 'none',
             trackerHealth: 'normal',
             metadataElapsedMs: 120_000,
@@ -102,11 +106,13 @@ describe('BasicDiagnosticsService', () => {
             status: 'downloading',
             sourceType: 'magnet',
             seedersCount: 1,
+            connectionsCount: 0,
             trackerCount: 1,
             fallbackTrackerCount: 3,
             resourceHealthScore: 25,
             resourceHealthLevel: 'critical',
             bottleneckCode: 'zero_speed_stall',
+            metadataState: 'idle',
             peerAvailability: 'scarce',
             trackerHealth: 'sparse',
             zeroSpeedDurationMs: 61_000
@@ -203,6 +209,36 @@ describe('BasicDiagnosticsService', () => {
         peerSparseCount: 0,
         trackerSparseCount: 0
       }
+    })
+  })
+
+  it('describes metadata exchange stalls after peer connections are established', async () => {
+    const service = new BasicDiagnosticsService(createAdapter())
+    const tasks = [
+      createTask({
+        id: 'task-meta',
+        status: 'metadata',
+        facts: {
+          sourceType: 'magnet',
+          seedersCount: 4,
+          connectionsCount: 2,
+          trackerCount: 4,
+          metadataElapsedMs: 90_000,
+          metadataState: 'exchanging_metadata'
+        }
+      })
+    ]
+
+    const summary = await service.getSummary(tasks as DownloadTask[], [])
+
+    expect(summary.taskFacts[0]).toMatchObject({
+      taskId: 'task-meta',
+      connectionsCount: 2,
+      metadataState: 'exchanging_metadata'
+    })
+    expect(summary.highlights[0]).toMatchObject({
+      id: 'metadata-task-meta',
+      detail: expect.stringContaining('已建立 2 个 peer 连接')
     })
   })
 })

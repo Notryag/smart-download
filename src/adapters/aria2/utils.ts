@@ -184,6 +184,7 @@ export function buildSnapshot(
     speedBytes,
     progress,
     seedersCount: parseCount(result.numSeeders),
+    connectionsCount: parseCount(result.connections),
     etaSeconds: parseEtaSeconds(totalBytes, downloadedBytes, speedBytes),
     errorMessage: translateAria2ErrorMessage(result.errorMessage),
     updatedAt: toIsoNow()

@@ -5,6 +5,7 @@
 当前阶段先补 Phase 2 的非 UI 后端能力，再做 UI 收口。
 
 已完成基础诊断事实层、最小策略层和对应测试，历史细项移至 `docs/archive/TASKS_DONE.md`。
+已补 `aria2.connections -> task facts` 与 `metadataState` 结构化阶段信号，可区分等待 peer、连接 peer、metadata 交换卡住三类场景。
 
 ## Current Constraints
 
@@ -18,7 +19,7 @@
 
 当前顺序：先补 Phase 2 后端增强，再做 UI 收口，最后再评估多引擎 / AI 扩展。
 
-- [ ] 补更多网络 / 源侧结构化信号，覆盖 tracker、peer、metadata 卡住等场景
+- [ ] 继续补更多网络 / 源侧结构化信号，当前已覆盖 tracker 弱、peer 未连上、metadata 交换卡住，后续补更细的 tracker / peer 边界
 - [ ] 将现有诊断判断继续收口为稳定规则层，统一 `facts -> score -> guidance` 输出
 - [ ] 收敛 AI 可消费的低歧义输入 schema，补齐缺失字段与边界状态
 - [ ] 诊断面板

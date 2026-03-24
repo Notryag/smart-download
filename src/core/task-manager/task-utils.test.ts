@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { DownloadTask } from '../../types'
 import {
   buildBottleneckCode,
+  buildMetadataState,
   buildPeerAvailability,
   buildResourceHealthLevel,
   buildResourceHealthScore,
@@ -104,6 +105,82 @@ describe('resolveRuntimeTaskMessage', () => {
       severity: 'warning',
       shortMessage: expect.any(String)
     })
+  })
+
+  it('distinguishes metadata wait stages from current network facts', () => {
+    const waitingPeersTask = createTask({
+      status: 'metadata',
+      facts: {
+        sourceType: 'magnet',
+        seedersCount: 0,
+        trackerCount: 1
+      }
+    })
+    const connectingPeersTask = createTask({
+      status: 'metadata',
+      facts: {
+        sourceType: 'magnet',
+        seedersCount: 3,
+        connectionsCount: 0,
+        trackerCount: 4
+      }
+    })
+    const exchangingMetadataTask = createTask({
+      status: 'metadata',
+      facts: {
+        sourceType: 'magnet',
+        seedersCount: 3,
+        connectionsCount: 2,
+        trackerCount: 4
+      }
+    })
+
+    expect(buildMetadataState(waitingPeersTask)).toBe('waiting_peers')
+    expect(buildMetadataState(connectingPeersTask)).toBe('connecting_peers')
+    expect(buildMetadataState(exchangingMetadataTask)).toBe('exchanging_metadata')
+  })
+
+  it('surfaces tracker-side weakness before any peer is discovered', () => {
+    const task = createTask({
+      status: 'metadata',
+      facts: {
+        sourceType: 'magnet',
+        seedersCount: 0,
+        trackerCount: 0,
+        metadataState: 'waiting_peers',
+        trackerHealth: 'none',
+        fallbackTrackerCount: 7
+      }
+    })
+
+    const guidance = buildTaskGuidance(task)
+
+    expect(guidance).toMatchObject({
+      code: 'magnet_metadata_sparse_peers',
+      shortMessage: expect.stringContaining('tracker')
+    })
+    expect(guidance?.reason).toContain('tracker 信号偏弱')
+  })
+
+  it('surfaces metadata exchange stalls after peer connections are established', () => {
+    const task = createTask({
+      status: 'metadata',
+      facts: {
+        sourceType: 'magnet',
+        seedersCount: 3,
+        connectionsCount: 2,
+        metadataState: 'exchanging_metadata',
+        fallbackTrackerCount: 3
+      }
+    })
+
+    const guidance = buildTaskGuidance(task)
+
+    expect(guidance).toMatchObject({
+      code: 'magnet_metadata_sparse_peers',
+      shortMessage: expect.stringContaining('已连上 2 个 peer')
+    })
+    expect(guidance?.bottleneck).toContain('metadata 交换阶段')
   })
 
   it('scores magnet resource health from current facts', () => {

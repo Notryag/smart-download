@@ -10,6 +10,7 @@ export interface Aria2TellStatusResult {
   completedLength: string
   downloadSpeed: string
   numSeeders?: string
+  connections?: string
   followedBy?: string[]
   belongsTo?: string
   infoHash?: string

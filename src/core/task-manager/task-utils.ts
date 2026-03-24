@@ -8,6 +8,7 @@ import {
 } from '../../types'
 import {
   buildBottleneckCode,
+  buildMetadataState,
   buildPeerAvailability,
   buildResourceHealthLevel,
   buildResourceHealthScore,
@@ -99,6 +100,9 @@ function buildMagnetFacts(
     seedersCount: hasFactPatch(patch, 'seedersCount')
       ? patch.seedersCount
       : previousFacts?.seedersCount ?? task.seedersCount,
+    connectionsCount: hasFactPatch(patch, 'connectionsCount')
+      ? patch.connectionsCount
+      : previousFacts?.connectionsCount ?? task.connectionsCount,
     trackerCount: hasFactPatch(patch, 'trackerCount')
       ? patch.trackerCount
       : previousFacts?.trackerCount ?? task.trackerCount,
@@ -118,12 +122,14 @@ function buildMagnetFacts(
     bottleneckCode: hasFactPatch(patch, 'bottleneckCode') ? patch.bottleneckCode : undefined,
     peerAvailability: hasFactPatch(patch, 'peerAvailability') ? patch.peerAvailability : undefined,
     trackerHealth: hasFactPatch(patch, 'trackerHealth') ? patch.trackerHealth : undefined,
+    metadataState: hasFactPatch(patch, 'metadataState') ? patch.metadataState : undefined,
     guidance: hasFactPatch(patch, 'guidance') ? patch.guidance : previousFacts?.guidance
   }
 }
 
 export {
   buildBottleneckCode,
+  buildMetadataState,
   buildPeerAvailability,
   buildResourceHealthLevel,
   buildResourceHealthScore,
@@ -140,11 +146,71 @@ function buildFallbackTrackerHint(fallbackTrackerCount: number | undefined): str
 
 function buildMetadataGuidance(task: DownloadTask): DownloadTaskGuidance {
   const seedersCount = task.facts?.seedersCount ?? task.seedersCount
+  const connectionsCount = task.facts?.connectionsCount ?? task.connectionsCount
   const fallbackHint = buildFallbackTrackerHint(task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount)
+  const trackerHealth = task.facts?.trackerHealth ?? buildTrackerHealth(task.facts?.trackerCount ?? task.trackerCount)
+  const metadataState = task.facts?.metadataState ?? buildMetadataState(task)
+
+  if (metadataState === 'exchanging_metadata') {
+    const connectedPeers = connectionsCount ?? 0
+
+    return {
+      code: 'magnet_metadata_sparse_peers',
+      severity: 'warning',
+      shortMessage: `metadata 获取偏慢，已连上 ${connectedPeers} 个 peer，但元数据交换仍未完成。${fallbackHint}`.trim(),
+      reason: `当前已建立 ${connectedPeers} 个 peer 连接，但 metadata 交换仍然较慢。${fallbackHint}`.trim(),
+      bottleneck: '瓶颈更偏向 metadata 交换阶段，当前并非单纯没有 peer 可连。',
+      nextStep: '建议继续观察一段时间；若长时间无变化，可稍后重试。'
+    }
+  }
+
+  if (metadataState === 'connecting_peers') {
+    return {
+      code: 'magnet_metadata_sparse_peers',
+      severity: 'warning',
+      shortMessage: `metadata 获取偏慢，已发现 peer，但连接仍未稳定。${fallbackHint}`.trim(),
+      reason: `当前已发现 ${seedersCount ?? 0} 个 peer，但还没有建立稳定连接。${fallbackHint}`.trim(),
+      bottleneck: '瓶颈更偏向 peer 连接建立阶段，而不是本地下载引擎。',
+      nextStep: '建议继续观察连接是否建立，或稍后重试。'
+    }
+  }
+
   const shortMessage =
-    (seedersCount ?? 0) <= 1
-      ? `资源较冷，metadata 获取偏慢，当前 peer 不足。${fallbackHint}`.trim()
-      : `metadata 获取偏慢，当前 peer 仍偏少。${fallbackHint}`.trim()
+    trackerHealth === 'none'
+      ? `metadata 获取偏慢，当前 tracker 信号较弱，仍未发现可用 peer。${fallbackHint}`.trim()
+      : trackerHealth === 'sparse'
+        ? `metadata 获取偏慢，当前 tracker 返回的 peer 仍不足。${fallbackHint}`.trim()
+        : (seedersCount ?? 0) <= 1
+            ? `资源较冷，metadata 获取偏慢，当前 peer 不足。${fallbackHint}`.trim()
+            : `metadata 获取偏慢，当前 peer 仍偏少。${fallbackHint}`.trim()
+
+  if (trackerHealth === 'none') {
+    return {
+      code: 'magnet_metadata_sparse_peers',
+      severity: 'warning',
+      shortMessage,
+      reason: `当前 tracker 信号偏弱，暂未返回可连接 peer。${fallbackHint}`.trim(),
+      bottleneck: '瓶颈更偏向 tracker / 资源侧，当前还没有形成可连接的 peer 列表。',
+      nextStep:
+        (task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount ?? 0) > 0
+          ? '建议继续观察或稍后再试。'
+          : '建议先补充 tracker，再继续观察。'
+    }
+  }
+
+  if (trackerHealth === 'sparse') {
+    return {
+      code: 'magnet_metadata_sparse_peers',
+      severity: 'warning',
+      shortMessage,
+      reason: `当前 tracker 返回的候选 peer 仍偏少，metadata 阶段被继续拉长。${fallbackHint}`.trim(),
+      bottleneck: '瓶颈更偏向 tracker 返回结果不足，资源侧热度也可能偏低。',
+      nextStep:
+        (task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount ?? 0) > 0
+          ? '建议继续观察或稍后再试。'
+          : '建议补充 tracker 后继续观察。'
+    }
+  }
 
   if ((seedersCount ?? 0) <= 0) {
     return {
@@ -180,7 +246,20 @@ function buildMetadataGuidance(task: DownloadTask): DownloadTaskGuidance {
 
 function buildZeroSpeedGuidance(task: DownloadTask): DownloadTaskGuidance {
   const seedersCount = task.facts?.seedersCount ?? task.seedersCount
+  const connectionsCount = task.facts?.connectionsCount ?? task.connectionsCount
   const fallbackHint = buildFallbackTrackerHint(task.facts?.fallbackTrackerCount ?? task.fallbackTrackerCount)
+
+  if ((connectionsCount ?? 0) > 0) {
+    return {
+      code: 'magnet_zero_speed_sparse_peers',
+      severity: 'warning',
+      shortMessage: `下载持续无速度，已连上 ${connectionsCount} 个 peer，但当前没有有效吞吐。${fallbackHint}`.trim(),
+      reason: `当前已有 ${connectionsCount} 个 peer 连接，但下载速度持续为 0。${fallbackHint}`.trim(),
+      bottleneck: '瓶颈更偏向 peer 连接质量或远端上传能力，而不是本地下载引擎。',
+      nextStep: '建议继续观察是否恢复吞吐；若长时间无变化，可稍后重试。'
+    }
+  }
+
   const shortMessage =
     (seedersCount ?? 0) <= 1
       ? `下载持续无速度，当前可用 peer 不足。${fallbackHint}`.trim()
@@ -251,12 +330,14 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
     totalBytes: snapshot.totalBytes,
     speedBytes: snapshot.speedBytes,
     seedersCount: snapshot.seedersCount,
+    connectionsCount: snapshot.connectionsCount,
     metadataSince,
     zeroSpeedSince,
     facts: buildMagnetFacts(
       task,
       {
         seedersCount: snapshot.seedersCount,
+        connectionsCount: snapshot.connectionsCount,
         metadataSince,
         zeroSpeedSince
       },
@@ -272,6 +353,7 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
   const peerAvailability = buildPeerAvailability(nextTask.facts?.seedersCount ?? nextTask.seedersCount)
   const trackerHealth = buildTrackerHealth(nextTask.facts?.trackerCount ?? nextTask.trackerCount)
   const bottleneckCode = buildBottleneckCode(nextTask)
+  const metadataState = buildMetadataState(nextTask)
 
   return updateTask(nextTask, {
     facts:
@@ -284,6 +366,7 @@ export function applySnapshot(task: DownloadTask, snapshot: DownloadTaskSnapshot
               bottleneckCode,
               peerAvailability,
               trackerHealth,
+              metadataState,
               guidance
             },
             nextTask.updatedAt

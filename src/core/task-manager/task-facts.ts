@@ -1,4 +1,9 @@
-import type { DownloadTask, DownloadTaskBottleneckCode, DownloadTaskFacts } from '../../types'
+import type {
+  DownloadTask,
+  DownloadTaskBottleneckCode,
+  DownloadTaskFacts,
+  DownloadTaskMetadataState
+} from '../../types'
 
 const LONG_METADATA_THRESHOLD_MS = 60_000
 const ZERO_SPEED_THRESHOLD_MS = 60_000
@@ -95,6 +100,25 @@ export function buildTrackerHealth(
     return 'sparse'
   }
   return 'normal'
+}
+
+export function buildMetadataState(task: DownloadTask): DownloadTaskMetadataState {
+  if (task.status !== 'metadata') {
+    return 'idle'
+  }
+
+  const seedersCount = task.facts?.seedersCount ?? task.seedersCount
+  const connectionsCount = task.facts?.connectionsCount ?? task.connectionsCount
+
+  if ((connectionsCount ?? 0) > 0) {
+    return 'exchanging_metadata'
+  }
+
+  if ((seedersCount ?? 0) > 0) {
+    return 'connecting_peers'
+  }
+
+  return 'waiting_peers'
 }
 
 export function buildBottleneckCode(task: DownloadTask): DownloadTaskBottleneckCode {
